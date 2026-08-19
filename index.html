@@ -1,0 +1,2566 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <script>
+    (function () {
+      const savedTheme = localStorage.getItem('careal-theme');
+      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', initialTheme);
+    })();
+  </script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CaReal — Find where your interests can take you.</title>
+  <meta name="description"
+    content="CaReal is an interest-based career exploration tool for students featuring AR previews.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <!-- 
+  A-FRAME CDN INTEGRATION NOTE:
+  A-Frame is loaded via CDN below as the only allowed external framework dependency.
+  If the CDN is blocked or unavailable (e.g. offline use), all core functions of
+  the application (interests selection, career matching, courses lists, and career paths)
+  remain fully operational. The AR preview button will degrade gracefully and show an
+  offline notice.
+-->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js" defer></script>
+
+  <style>
+    /* =========================================================
+   CaReal — Design tokens & CSS Variables
+   Palette: cool paper background, ink navy text,
+   amber (discovery) + teal (growth) accents.
+   ========================================================= */
+
+    :root {
+      --color-bg: #F3F5FA;
+      --color-bg-alt: #EAEDF7;
+      --color-surface: #FFFFFF;
+      --color-ink: #14172B;
+      --color-ink-soft: #4B4F6B;
+      --color-muted: #8A8FAE;
+      --color-border: #DCE0EF;
+
+      --color-amber: #F2994A;
+      --color-amber-deep: #D97A2E;
+      --color-teal: #2FBF9F;
+      --color-teal-deep: #1F9A80;
+      --color-navy-deep: #14172B;
+
+      --font-display: "Fraunces", Georgia, serif;
+      --font-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+
+      --shadow-sm: 0 1px 2px rgba(20, 23, 43, 0.06), 0 1px 1px rgba(20, 23, 43, 0.04);
+      --shadow-md: 0 8px 24px rgba(20, 23, 43, 0.08);
+      --shadow-lg: 0 20px 48px rgba(20, 23, 43, 0.16);
+
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    :root[data-theme="dark"] {
+      --color-bg: #14172B;
+      --color-bg-alt: #1B1F38;
+      --color-surface: #1E2340;
+      --color-ink: #F3F5FA;
+      --color-ink-soft: #C4C8E0;
+      --color-muted: #8388AC;
+      --color-border: #313657;
+    }
+
+    /* =========================================================
+   Reset & base styles
+   ========================================================= */
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    body {
+      margin: 0;
+      background: var(--color-bg);
+      color: var(--color-ink);
+      font-family: var(--font-body);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--font-display);
+      margin: 0;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    button {
+      font-family: var(--font-body);
+      cursor: pointer;
+    }
+
+    :focus-visible {
+      outline: 3px solid var(--color-amber);
+      outline-offset: 3px;
+      border-radius: 4px;
+    }
+
+    .section-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 96px 32px;
+    }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-teal-deep);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .eyebrow-center {
+      text-align: center;
+    }
+
+    .section-title {
+      font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      text-align: center;
+    }
+
+    .section-subtitle {
+      text-align: center;
+      color: var(--color-ink-soft);
+      max-width: 560px;
+      margin: 14px auto 0;
+      font-size: 1.05rem;
+    }
+
+    /* =========================================================
+   Buttons
+   ========================================================= */
+
+    .btn {
+      font-weight: 600;
+      border-radius: 999px;
+      border: none;
+      padding: 14px 26px;
+      font-size: 1rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease), color 0.25s var(--ease), opacity 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--color-navy-deep);
+      color: #FBF9F4;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      background: #21254A;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-lg {
+      padding: 16px 32px;
+      font-size: 1.05rem;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-ink);
+      border: 1.5px solid var(--color-border);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--color-navy-deep);
+      background: var(--color-bg-alt);
+    }
+
+    .arrow {
+      transition: transform 0.25s var(--ease);
+      display: inline-block;
+    }
+
+    .btn:hover .arrow {
+      transform: translateX(4px);
+    }
+
+    /* =========================================================
+   Header
+   ========================================================= */
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(243, 245, 250, 0.82);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .site-header {
+        background: rgba(20, 23, 43, 0.82);
+      }
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      font-weight: 600;
+      text-decoration: none;
+      color: var(--color-ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-mark {
+      color: var(--color-amber);
+      display: inline-flex;
+    }
+
+    .primary-nav {
+      display: flex;
+      gap: 32px;
+    }
+
+    .primary-nav a {
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.95rem;
+      color: var(--color-ink-soft);
+      position: relative;
+      padding-bottom: 4px;
+      transition: color 0.2s;
+    }
+
+    .primary-nav a:hover {
+      color: var(--color-ink);
+    }
+
+    .primary-nav a::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 0;
+      height: 2px;
+      background: var(--color-amber);
+      transition: width 0.25s var(--ease);
+    }
+
+    .primary-nav a:hover::after {
+      width: 100%;
+    }
+
+    .nav-toggle {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      background: none;
+      border: none;
+      padding: 8px;
+    }
+
+    .nav-toggle span {
+      width: 22px;
+      height: 2px;
+      background: var(--color-ink);
+      border-radius: 2px;
+      transition: transform 0.25s var(--ease), opacity 0.2s;
+    }
+
+    /* =========================================================
+   Hero
+   ========================================================= */
+
+    .hero {
+      position: relative;
+      padding: 120px 32px 100px;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 2;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .hero-title {
+      font-size: clamp(3.2rem, 9vw, 5.6rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--color-navy-deep);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .hero-title {
+        color: var(--color-ink);
+      }
+    }
+
+    .hero-tagline {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+      color: var(--color-teal-deep);
+      margin-top: 18px;
+    }
+
+    .hero-desc {
+      margin-top: 22px;
+      font-size: 1.1rem;
+      color: var(--color-ink-soft);
+      line-height: 1.7;
+    }
+
+    .hero .btn-primary {
+      margin-top: 36px;
+    }
+
+    .hero-orbit {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .orbit-chip {
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      animation: float 7s ease-in-out infinite;
+    }
+
+    .chip-1 {
+      top: 12%;
+      left: 12%;
+      animation-delay: 0s;
+    }
+
+    .chip-2 {
+      top: 22%;
+      right: 14%;
+      animation-delay: 1.1s;
+    }
+
+    .chip-3 {
+      bottom: 26%;
+      left: 8%;
+      animation-delay: 2s;
+    }
+
+    .chip-4 {
+      bottom: 14%;
+      right: 10%;
+      animation-delay: 0.6s;
+    }
+
+    .chip-5 {
+      top: 55%;
+      left: 20%;
+      animation-delay: 2.6s;
+    }
+
+    .chip-6 {
+      top: 60%;
+      right: 22%;
+      animation-delay: 1.7s;
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-14px);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .orbit-chip {
+        display: none;
+      }
+    }
+
+    /* =========================================================
+   Interest selection
+   ========================================================= */
+
+    .interests-section {
+      background: var(--color-bg-alt);
+    }
+
+    .interest-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+      margin-top: 48px;
+    }
+
+    .interest-card {
+      background: var(--color-surface);
+      border: 1.5px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 20px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+      transition: transform 0.2s var(--ease), border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .interest-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--color-teal);
+    }
+
+    .interest-card .icon {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+
+    .interest-card .name {
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+
+    .interest-card[aria-pressed="true"] {
+      background: var(--color-navy-deep);
+      border-color: var(--color-navy-deep);
+      color: #FBF9F4;
+      animation: pop 0.3s var(--ease);
+    }
+
+    .interest-card[aria-pressed="true"] .icon {
+      filter: drop-shadow(0 0 6px rgba(242, 153, 74, 0.6));
+    }
+
+    @keyframes pop {
+      0% {
+        transform: scale(1);
+      }
+
+      40% {
+        transform: scale(1.08);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    .selection-bar {
+      margin-top: 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .selection-count {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: var(--color-ink-soft);
+    }
+
+    .selection-hint {
+      font-size: 0.85rem;
+      color: var(--color-muted);
+    }
+
+    /* =========================================================
+   Results
+   ========================================================= */
+
+    .results-section {
+      background: var(--color-bg);
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 22px;
+      margin-top: 48px;
+    }
+
+    .career-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: var(--shadow-sm);
+      opacity: 0;
+      transform: translateY(16px);
+      animation: reveal 0.5s var(--ease) forwards;
+      transition: box-shadow 0.25s, transform 0.25s;
+    }
+
+    .career-card:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-4px);
+    }
+
+    @keyframes reveal {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .career-card-head {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .match-dial {
+      flex-shrink: 0;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .match-dial::before {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      background: var(--color-surface);
+      border-radius: 50%;
+    }
+
+    .match-dial-label {
+      position: relative;
+      z-index: 1;
+      font-size: 0.85rem;
+      color: var(--color-navy-deep);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .match-dial-label {
+        color: var(--color-ink);
+      }
+
+      .match-dial::before {
+        background: var(--color-surface);
+      }
+    }
+
+    .career-name {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .match-badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-top: 4px;
+    }
+
+    .match-excellent {
+      background: rgba(47, 191, 159, 0.16);
+      color: var(--color-teal-deep);
+    }
+
+    .match-strong {
+      background: rgba(242, 153, 74, 0.16);
+      color: var(--color-amber-deep);
+    }
+
+    .match-possible {
+      background: var(--color-bg-alt);
+      color: var(--color-ink-soft);
+    }
+
+    .career-explanation {
+      font-size: 0.92rem;
+      color: var(--color-ink-soft);
+      line-height: 1.6;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      background: var(--color-bg-alt);
+      border: 1px solid var(--color-border);
+      color: var(--color-ink-soft);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .tag-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-muted);
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .explore-btn {
+      margin-top: auto;
+      align-self: flex-start;
+      background: transparent;
+      border: 1.5px solid var(--color-navy-deep);
+      color: var(--color-navy-deep);
+      border-radius: 999px;
+      padding: 9px 18px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .explore-btn {
+        border-color: var(--color-ink);
+        color: var(--color-ink);
+      }
+    }
+
+    .explore-btn:hover {
+      background: var(--color-navy-deep);
+      color: #FBF9F4;
+    }
+
+    .results-footer {
+      display: flex;
+      justify-content: center;
+      margin-top: 56px;
+    }
+
+    /* =========================================================
+   About
+   ========================================================= */
+
+    .about-section {
+      background: var(--color-bg-alt);
+    }
+
+    .about-inner {
+      max-width: 680px;
+      text-align: center;
+    }
+
+    .about-text {
+      margin-top: 18px;
+      color: var(--color-ink-soft);
+      font-size: 1.05rem;
+    }
+
+    .disclaimer {
+      margin-top: 28px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-left: 4px solid var(--color-amber);
+      border-radius: var(--radius-sm);
+      padding: 18px 20px;
+      text-align: left;
+      font-size: 0.9rem;
+      color: var(--color-ink-soft);
+    }
+
+    /* =========================================================
+   Modal & Detail Upgrades
+   ========================================================= */
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(20, 23, 43, 0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 100;
+      animation: fadeIn 0.2s var(--ease);
+    }
+
+    .modal-overlay[hidden] {
+      display: none;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    .modal {
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      max-width: 680px;
+      width: 100%;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 40px;
+      position: relative;
+      box-shadow: var(--shadow-lg);
+      animation: modalIn 0.3s var(--ease);
+    }
+
+    @keyframes modalIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.97);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      background: var(--color-bg-alt);
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 1rem;
+      color: var(--color-ink-soft);
+      transition: background 0.2s, color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close:hover {
+      background: var(--color-border);
+      color: var(--color-ink);
+    }
+
+    .modal-content h3 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      padding-right: 30px;
+    }
+
+    .modal-content .match-badge {
+      margin-top: 8px;
+      margin-bottom: 18px;
+    }
+
+    .modal-section {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--color-border);
+    }
+
+    .modal-section:first-of-type {
+      border-top: none;
+      padding-top: 0;
+      margin-top: 12px;
+    }
+
+    .modal-section p {
+      color: var(--color-ink-soft);
+      font-size: 0.95rem;
+      line-height: 1.65;
+    }
+
+    /* Timeline / Stepper Design */
+    .timeline {
+      position: relative;
+      margin: 24px 0 24px 16px;
+      padding-left: 28px;
+      border-left: 2px solid var(--color-border);
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .timeline-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -37px;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--color-teal);
+      border: 3px solid var(--color-surface);
+      box-shadow: 0 0 0 2px var(--color-teal);
+    }
+
+    .timeline-item:first-child .timeline-dot {
+      background: var(--color-amber);
+      box-shadow: 0 0 0 2px var(--color-amber);
+    }
+
+    .timeline-item:last-child .timeline-dot {
+      background: var(--color-navy-deep);
+      box-shadow: 0 0 0 2px var(--color-navy-deep);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .timeline-item:last-child .timeline-dot {
+        background: var(--color-ink);
+        box-shadow: 0 0 0 2px var(--color-ink);
+      }
+    }
+
+    .timeline-stage {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--color-ink);
+      margin-bottom: 4px;
+    }
+
+    .timeline-detail {
+      font-size: 0.88rem;
+      color: var(--color-ink-soft);
+      line-height: 1.5;
+    }
+
+    /* Course Tags styling */
+    .course-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .course-tag {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      background: rgba(47, 191, 159, 0.08);
+      border: 1px solid rgba(47, 191, 159, 0.25);
+      color: var(--color-teal-deep);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .course-tag:hover {
+      background: rgba(47, 191, 159, 0.15);
+      transform: translateY(-1px);
+    }
+
+    /* A-Frame AR Launch Button */
+    .btn-ar {
+      background: linear-gradient(135deg, var(--color-amber) 0%, #E27D24 100%);
+      color: #14172B;
+      box-shadow: 0 4px 14px rgba(242, 153, 74, 0.4);
+      font-weight: 700;
+      width: 100%;
+      justify-content: center;
+      margin-top: 24px;
+      padding: 16px 28px;
+      font-size: 1.1rem;
+    }
+
+    .btn-ar:hover:not(:disabled) {
+      background: linear-gradient(135deg, #FFB066 0%, #F2994A 100%);
+      box-shadow: 0 6px 20px rgba(242, 153, 74, 0.6);
+      transform: translateY(-2px);
+    }
+
+    .btn-ar:disabled {
+      background: var(--color-bg-alt);
+      color: var(--color-muted);
+      border: 1px dashed var(--color-border);
+      box-shadow: none;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .ar-notice {
+      font-size: 0.8rem;
+      color: var(--color-muted);
+      text-align: center;
+      margin-top: 10px;
+      line-height: 1.4;
+      padding: 0 12px;
+    }
+
+    .ar-unsupported-banner {
+      background: rgba(217, 122, 46, 0.1);
+      border: 1px solid rgba(217, 122, 46, 0.3);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-top: 16px;
+      font-size: 0.88rem;
+    }
+
+    /* =========================================================
+   A-Frame AR Container & Close HUD
+   ========================================================= */
+
+    .ar-scene-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      background: #000;
+    }
+
+    .ar-close-button {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      background: rgba(20, 23, 43, 0.85);
+      border: 1px solid var(--color-border);
+      color: #F3F5FA;
+      padding: 10px 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: var(--shadow-md);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ar-close-button:hover {
+      background: var(--color-ink);
+      transform: scale(1.05);
+    }
+
+    /* =========================================================
+   Footer
+   ========================================================= */
+
+    .site-footer {
+      background: var(--color-navy-deep);
+      color: #E4E6F5;
+      padding: 48px 32px;
+    }
+
+    .footer-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .footer-brand {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .footer-brand .logo-mark {
+      color: var(--color-amber);
+    }
+
+    .footer-tagline {
+      font-style: italic;
+      color: #A9AEDA;
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+
+    .footer-copy {
+      margin-top: 18px;
+      font-size: 0.8rem;
+      color: #7A7FAE;
+      font-family: var(--font-mono);
+    }
+
+    /* =========================================================
+   Responsive styling
+   ========================================================= */
+
+    @media (max-width: 860px) {
+      .section-inner {
+        padding: 72px 24px;
+      }
+
+      .hero {
+        padding: 100px 24px 80px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .nav-toggle {
+        display: flex;
+      }
+
+      .primary-nav {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--color-surface);
+        flex-direction: column;
+        gap: 0;
+        border-bottom: 1px solid var(--color-border);
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s var(--ease);
+      }
+
+      .primary-nav.open {
+        max-height: 240px;
+      }
+
+      .primary-nav a {
+        padding: 16px 24px;
+        border-top: 1px solid var(--color-border);
+      }
+
+      .interest-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+      }
+
+      .modal {
+        padding: 28px 22px;
+      }
+    }
+
+    /* Header Actions & Theme Toggle styling */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .theme-toggle {
+      background: none;
+      border: none;
+      color: var(--color-ink);
+      padding: 8px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.25s var(--ease), transform 0.2s var(--ease);
+    }
+
+    .theme-toggle:hover {
+      background: var(--color-bg-alt);
+      transform: scale(1.05);
+    }
+
+    /* SVG icon visibility states depending on active data-theme */
+    :root[data-theme="dark"] .theme-toggle .moon-icon {
+      display: none;
+    }
+
+    :root[data-theme="dark"] .theme-toggle .sun-icon {
+      display: block;
+    }
+
+    :root:not([data-theme="dark"]) .theme-toggle .sun-icon {
+      display: none;
+    }
+
+    :root:not([data-theme="dark"]) .theme-toggle .moon-icon {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ============ HEADER ============ -->
+  <header class="site-header" id="top">
+    <div class="header-inner">
+      <a href="#top" class="logo" aria-label="CaReal home">
+        <span class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M16 6 L19 14 L27 16 L19 18 L16 26 L13 18 L5 16 L13 14 Z" fill="currentColor" />
+          </svg>
+        </span>
+        CaReal
+      </a>
+
+      <div class="header-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+          <svg class="sun-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="4.22" x2="19.78" y2="5.64" />
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </button>
+        <button class="nav-toggle" id="navToggle" aria-label="Open navigation menu" aria-expanded="false"
+          aria-controls="primaryNav">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+
+      <nav class="primary-nav" id="primaryNav" aria-label="Primary">
+        <a href="#top">Home</a>
+        <a href="#interests">Explore</a>
+        <a href="#about">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+      <div class="hero-orbit" aria-hidden="true">
+        <span class="orbit-chip chip-1">∑</span>
+        <span class="orbit-chip chip-2">⚙</span>
+        <span class="orbit-chip chip-3">🎨</span>
+        <span class="orbit-chip chip-4">🧬</span>
+        <span class="orbit-chip chip-5">⚖</span>
+        <span class="orbit-chip chip-6">💡</span>
+      </div>
+      <div class="hero-inner">
+        <p class="eyebrow">A career compass for students</p>
+        <h1 class="hero-title">CaReal</h1>
+        <p class="hero-tagline">Find where your interests can take you.</p>
+        <p class="hero-desc">Explore career fields that align with the things you're curious about, enjoy learning, and
+          want to build.</p>
+        <button class="btn btn-primary btn-lg" id="startExploringBtn">
+          Start Exploring <span class="arrow" aria-hidden="true">→</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ INTEREST SELECTION ============ -->
+    <section class="interests-section" id="interests">
+      <div class="section-inner">
+        <p class="eyebrow eyebrow-center">Step one</p>
+        <h2 class="section-title">What are you interested in?</h2>
+        <p class="section-subtitle">Select the areas you genuinely enjoy. There are no right or wrong answers.</p>
+
+        <div class="interest-grid" id="interestGrid" role="group" aria-label="Interest selection"></div>
+
+        <div class="selection-bar">
+          <p class="selection-count" id="selectionCount" aria-live="polite">0 interests selected</p>
+          <button class="btn btn-primary btn-lg" id="discoverBtn" disabled>
+            Discover My Career Paths <span class="arrow" aria-hidden="true">→</span>
+          </button>
+          <p class="selection-hint" id="selectionHint">Select at least 2 interests to continue.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RESULTS ============ -->
+    <section class="results-section" id="results" hidden>
+      <div class="section-inner">
+        <p class="eyebrow eyebrow-center">Step two</p>
+        <h2 class="section-title">Your Career Paths</h2>
+        <p class="section-subtitle">Based on the interests you selected, these fields may be worth exploring.</p>
+
+        <div class="results-grid" id="resultsGrid"></div>
+
+        <div class="results-footer">
+          <button class="btn btn-ghost" id="restartBtn">Start Again</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ABOUT ============ -->
+    <section class="about-section" id="about">
+      <div class="section-inner about-inner">
+        <h2 class="section-title">About CaReal</h2>
+        <p class="about-text">CaReal is a simple interest-based career exploration tool designed to help students
+          discover fields they may want to learn more about.</p>
+        <div class="disclaimer">
+          <strong>A quick note:</strong> CaReal provides suggestions based on selected interests. It is not a
+          professional career assessment and should not be used as the sole basis for career decisions.
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ CAREER DETAIL MODAL ============ -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" id="modal">
+      <button class="modal-close" id="modalClose" aria-label="Close career details">✕</button>
+      <div class="modal-content" id="modalContent">
+        <!-- populated dynamically by script -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FULLSCREEN AR EXPERIENCE CONTAINER ============ -->
+  <div id="arSceneContainer" class="ar-scene-container" hidden></div>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="22" height="22">
+            <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M16 6 L19 14 L27 16 L19 18 L16 26 L13 18 L5 16 L13 14 Z" fill="currentColor" />
+          </svg>
+        </span>
+        CaReal
+      </div>
+      <p class="footer-tagline">Find where your interests can take you.</p>
+      <p class="footer-copy">© 2026 CaReal</p>
+    </div>
+  </footer>
+
+  <!-- ============ JAVASCRIPT LOGIC ============ -->
+  <script>
+    /* =========================================================
+       CaReal — JavaScript Logic
+       Sections:
+       1. Career Database (20 Fields, extended)
+       2. Interests Data
+       3. App State
+       4. A-Frame Component Registration
+       5. Selection Handling
+       6. Matching Engine
+       7. Rendering (Results, Modal, Timeline)
+       8. AR Scene Handling (Launch, Arc Panel Generation, Exit)
+       9. Navigation & General UI
+       ========================================================= */
+
+    /* ---------------------------------------------------------
+       1. CAREER DATABASE
+       --------------------------------------------------------- */
+    const CAREERS = [
+      {
+        name: "Software Engineering",
+        interests: ["Programming", "Computer Science", "Problem Solving", "Technology"],
+        description: "Designing, building, and maintaining the software that powers apps, websites, and systems people use every day.",
+        roles: ["Software Engineer", "Backend Developer", "Frontend Developer", "Mobile App Developer"],
+        skills: ["Programming", "Debugging", "System Design", "Collaboration"],
+        subjects: ["Computer Science", "Mathematics"],
+        themeColor: "#2f3e82",
+        courses: [
+          "Intro to Programming (Python/JS)",
+          "Data Structures & Algorithms",
+          "Web Development Fundamentals",
+          "Object-Oriented Software Design",
+          "Software Testing & CI/CD Pipelines"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Learn programming basics, algorithm logic, and build simple CLI applications." },
+          { stage: "Education / Training", detail: "Earn a degree, complete a coding bootcamp, or build a portfolio through self-study." },
+          { stage: "Entry Role", detail: "Join a development team as a Junior Software Engineer to write code and fix bugs." },
+          { stage: "Growth", detail: "Move into mid-level and Senior Developer roles, owning component architectures." },
+          { stage: "Senior / Lead", detail: "Define engineering strategy, choose tech stacks, and lead development teams." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Attend team daily stand-up to share updates and align code tasks." },
+          { time: "Midday", activity: "Code a brand-new interface feature in the local dev workspace." },
+          { time: "Evening", activity: "Review pull requests from peers and offer design optimizations." },
+          { time: "Post Work", activity: "Validate build pipelines, execute unit tests, and log documentation." }
+        ]
+      },
+      {
+        name: "Data Science",
+        interests: ["Mathematics", "Programming", "Data & Statistics", "Artificial Intelligence", "Problem Solving"],
+        description: "Turning raw data into insight — finding patterns and building models that help organizations make better decisions.",
+        roles: ["Data Scientist", "Data Analyst", "Data Engineer"],
+        skills: ["Python/R", "Statistics & Probability", "SQL Databases", "Data Visualization"],
+        subjects: ["Mathematics", "Computer Science", "Statistics"],
+        themeColor: "#0a5c5a",
+        courses: [
+          "Intro to Python Programming",
+          "Statistics & Probability",
+          "Data Structures & Algorithms",
+          "Machine Learning Fundamentals",
+          "SQL & Database Architectures"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Build strong statistics, algebra, and basic python coding skills." },
+          { stage: "Specialization", detail: "Pursue a specialized degree or bootcamp track in data science or modeling." },
+          { stage: "Entry Role", detail: "Start as a Junior Data Analyst clean-logging raw company databases." },
+          { stage: "Growth", detail: "Develop ML predictive models and end-to-end data analytics scripts." },
+          { stage: "Senior / Lead", detail: "Oversee data architecture, lead analytics units, and advise executives." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Verify script pipeline runs and troubleshoot dashboard data errors." },
+          { time: "Midday", activity: "Meet with product leads to design an A/B test for user retention." },
+          { time: "Evening", activity: "Build a random-forest predictive algorithm in a Jupyter notebook." },
+          { time: "Post Work", activity: "Format data charts and draft a findings summary for stakeholders." }
+        ]
+      },
+      {
+        name: "Artificial Intelligence & Machine Learning",
+        interests: ["Artificial Intelligence", "Programming", "Mathematics", "Research", "Problem Solving"],
+        description: "Building systems that learn from data — from recommendation engines to language models and computer vision.",
+        roles: ["ML Engineer", "AI Researcher", "Computer Vision Specialist"],
+        skills: ["Deep Learning", "TensorFlow/PyTorch", "Algorithm Optimization", "Vector Calculus"],
+        subjects: ["Computer Science", "Mathematics", "Statistics"],
+        themeColor: "#5e2ca5",
+        courses: [
+          "Linear Algebra & Calculus",
+          "Machine Learning Techniques",
+          "Deep Learning & Neural Networks",
+          "Natural Language Processing",
+          "Reinforcement Learning"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Master linear algebra, probability, and advanced Python scripting." },
+          { stage: "Applied Projects", detail: "Build and train small models using open-source neural net libraries." },
+          { stage: "Entry Role", detail: "Work as an Associate ML Engineer deploying simple prediction APIs." },
+          { stage: "Growth", detail: "Tune hyperparameters, build training pipelines, and scale model sizes." },
+          { stage: "Senior / Lead", detail: "Invent new network architectures, optimize efficiency, and lead research." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Assess validation loss curves for overnight deep-learning training runs." },
+          { time: "Midday", activity: "Read a newly released AI research paper detailing neural optimization." },
+          { time: "Evening", activity: "Implement training optimizations to speed up model inference speeds." },
+          { time: "Post Work", activity: "Discuss model deployment details and system API schemas with Devops." }
+        ]
+      },
+      {
+        name: "Cybersecurity",
+        interests: ["Computer Science", "Programming", "Technology", "Problem Solving"],
+        description: "Protecting networks, systems, and data from digital threats through defense, testing, and smart system design.",
+        roles: ["Security Analyst", "Penetration Tester", "Security Architect"],
+        skills: ["Network Auditing", "Threat Analysis", "Cryptography", "Linux Administration"],
+        subjects: ["Computer Science", "Mathematics"],
+        themeColor: "#9c1a1c",
+        courses: [
+          "Computer Networking Essentials",
+          "Introduction to Cryptography",
+          "Ethical Hacking & Penetration Testing",
+          "Operating Systems Security",
+          "Incident Response & Digital Forensics"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Learn OS concepts, networking configurations, and basic bash scripting." },
+          { stage: "Certification", detail: "Acquire certifications like Security+ or CEH to validate knowledge." },
+          { stage: "Entry Role", detail: "Work in a Security Operations Center monitoring networks and analyzing logs." },
+          { stage: "Growth", detail: "Execute authorized hack tests, audit network code, and patch bugs." },
+          { stage: "Senior / Lead", detail: "Architect complex corporate security grids and direct incident response." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Review security logs and isolate suspicious port scan activities." },
+          { time: "Midday", activity: "Set up and execute a vulnerability scan against staging servers." },
+          { time: "Evening", activity: "Draft patch recommendations for vulnerabilities found in code audits." },
+          { time: "Post Work", activity: "Deploy updated intrusion detection rules and brief the security team." }
+        ]
+      },
+      {
+        name: "Mechanical Engineering",
+        interests: ["Engineering", "Physics", "Mathematics", "Problem Solving"],
+        description: "Designing and building machines, vehicles, and mechanical systems, from small components to large-scale structures.",
+        roles: ["Mechanical Engineer", "CAD Designer", "Manufacturing Consultant"],
+        skills: ["3D CAD Modeling", "Structural Analysis", "Materials Selection", "Thermodynamics"],
+        subjects: ["Physics", "Mathematics"],
+        themeColor: "#7e5a1b",
+        courses: [
+          "Engineering Mechanics & Statics",
+          "Thermodynamics & Heat Transfer",
+          "Computer-Aided Design (CAD)",
+          "Fluid Dynamics Principles",
+          "Materials Science & Testing"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Learn fundamental physics laws, mathematics, and drafting basics." },
+          { stage: "Academic Training", detail: "Earn a university degree in Mechanical Engineering or equivalent." },
+          { stage: "Entry Role", detail: "Work as an Associate Draftsman creating detailed 3D part mockups." },
+          { stage: "Growth", detail: "Coordinate hardware testing, build prototypes, and supervise production." },
+          { stage: "Senior / Lead", detail: "Approve critical structural designs, lead project teams, and consult." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Use CAD software to adjust tolerances on a device casing design." },
+          { time: "Midday", activity: "Visit the workshop to inspect the structural assembly of a prototype." },
+          { time: "Evening", activity: "Run a simulated finite element stress test (FEA) on a metal bracket." },
+          { time: "Post Work", activity: "Summarize stress simulation data and write safety factor calculations." }
+        ]
+      },
+      {
+        name: "Electrical Engineering",
+        interests: ["Engineering", "Physics", "Technology", "Mathematics"],
+        description: "Working with electrical systems and circuits, from power grids to the electronics inside everyday devices.",
+        roles: ["Electrical Engineer", "Hardware Developer", "Power Systems Lead"],
+        skills: ["PCB Layout Design", "Circuit Schematics", "Oscilloscope Diagnosis", "Firmware Coding"],
+        subjects: ["Physics", "Mathematics"],
+        themeColor: "#b88a00",
+        courses: [
+          "Circuit Analysis & Design",
+          "Electromagnetic Theory",
+          "Signals & Systems Analysis",
+          "Microcontroller Programming",
+          "Power Grid Engineering"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Study basic algebra, electronic components, and physical physics laws." },
+          { stage: "Lab Experience", detail: "Practice circuit assembly, soldering, and diagnostics in university labs." },
+          { stage: "Entry Role", detail: "Start as an Associate Hardware Engineer designing basic circuit boards." },
+          { stage: "Growth", detail: "Program microcontrollers, design multi-layer PCBs, and verify signals." },
+          { stage: "Senior / Lead", detail: "Architect complex hardware architectures, audit designs, and select parts." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Review physical circuit schematics and cross-reference component layouts." },
+          { time: "Midday", activity: "Configure microcontroller code and monitor signals with an oscilloscope." },
+          { time: "Evening", activity: "Solder test resistors on a prototype board to resolve a noise issue." },
+          { time: "Post Work", activity: "Study component datasheets and order parts for the next physical build." }
+        ]
+      },
+      {
+        name: "Chemical Engineering",
+        interests: ["Engineering", "Chemistry", "Problem Solving", "Research"],
+        description: "Applying chemistry and engineering principles to design processes that produce fuels, medicines, and materials.",
+        roles: ["Process Engineer", "Chemical Analyst", "Materials Consultant"],
+        skills: ["Reaction Kinetics", "Industrial Piping Design", "Safety Protocols", "Mass Balancing"],
+        subjects: ["Chemistry", "Mathematics"],
+        themeColor: "#1e7a55",
+        courses: [
+          "Organic Chemistry Principles",
+          "Chemical Process Safety",
+          "Mass & Energy Balances",
+          "Chemical Reaction Engineering",
+          "Transport Phenomena"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Build core chemistry laboratory habits and basic physics math logic." },
+          { stage: "Specialization", detail: "Study heat transport, scale-up dynamics, and process safety principles." },
+          { stage: "Entry Role", detail: "Work as a Junior Process Engineer logging factory telemetry data." },
+          { stage: "Growth", detail: "Optimize chemical outputs, manage reactions, and enforce plant protocols." },
+          { stage: "Senior / Lead", detail: "Design complete production processes, consult on environmental impacts, and manage refineries." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Analyze plant pressure levels and troubleshoot a chemical yield decrease." },
+          { time: "Midday", activity: "Model process output variations in simulated flow environment software." },
+          { time: "Evening", activity: "Meet with safety engineers to draft compliance protocols for a new line." },
+          { time: "Post Work", activity: "Approve maintenance logs and complete industrial safety checklist files." }
+        ]
+      },
+      {
+        name: "Medicine & Healthcare",
+        interests: ["Medicine", "Biology", "Chemistry", "Research"],
+        description: "Diagnosing, treating, and caring for patients — a field built on biology, empathy, and lifelong learning.",
+        roles: ["General Physician", "Clinical Researcher", "Healthcare Director"],
+        skills: ["Pathology Assessment", "Surgical Basics", "Patient Communication", "Differential Diagnosis"],
+        subjects: ["Biology", "Chemistry"],
+        themeColor: "#1b6e82",
+        courses: [
+          "Human Anatomy & Physiology",
+          "Medical Terminology Essentials",
+          "Pathophysiology & Disease",
+          "Introduction to Pharmacology",
+          "Clinical Communication Skills"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Complete science modules and prepare for entrance licensing examinations." },
+          { stage: "Medical School", detail: "Participate in clinical training, pathology lectures, and internship rotations." },
+          { stage: "Residency", detail: "Work in a hospital under supervision to learn practical medical care." },
+          { stage: "Attending Status", detail: "Practice medicine independently, diagnose patients, and choose options." },
+          { stage: "Leadership", detail: "Direct department operations, manage patient teams, and consult on policies." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Make rounds to check on admitted patients and review charts." },
+          { time: "Midday", activity: "Meet with senior medical staff to discuss complex test result diagnostics." },
+          { time: "Evening", activity: "Hold outpatient clinic appointments and examine primary symptoms." },
+          { time: "Post Work", activity: "Approve medication orders, file charting updates, and finalize files." }
+        ]
+      },
+      {
+        name: "Biotechnology",
+        interests: ["Biology", "Chemistry", "Research", "Medicine"],
+        description: "Using living systems and biological tools to develop new medicines, treatments, and sustainable technologies.",
+        roles: ["Biotech Researcher", "Lab Technician", "Bioprocess Developer"],
+        skills: ["Cell Culturing", "Gene Editing (CRISPR)", "Assay Development", "Sequence Interpretation"],
+        subjects: ["Biology", "Chemistry"],
+        themeColor: "#7c227c",
+        courses: [
+          "Molecular & Cell Biology",
+          "Bioprocess Engineering",
+          "Genetics & Recombinant DNA",
+          "Bioinformatics & Sequence Analysis",
+          "Biotech Regulations & Ethics"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Understand cell biology, genetics basics, and basic lab safety." },
+          { stage: "Lab Competency", detail: "Learn lab skills like gene editing and cell culture in university." },
+          { stage: "Entry Role", detail: "Work as a Biotech Lab Assistant performing simple cell growth tests." },
+          { stage: "Growth", detail: "Design customized gene vectors and analyze bio-sequence data outputs." },
+          { stage: "Senior / Lead", detail: "Direct pipeline research, manage project portfolios, and draft patents." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Inspect clean-room incubators and catalog bioreactor growth." },
+          { time: "Midday", activity: "Run bioinformatic sequencing scripts to analyze mutant cell samples." },
+          { time: "Evening", activity: "Use high-resolution imaging to verify gene integration in DNA strands." },
+          { time: "Post Work", activity: "Write down experiment parameters and update active lab inventory lists." }
+        ]
+      },
+      {
+        name: "Scientific Research",
+        interests: ["Research", "Physics", "Chemistry", "Biology", "Problem Solving"],
+        description: "Investigating open questions across science, designing experiments, and contributing new knowledge to a field.",
+        roles: ["Research Scientist", "Academic Professor", "Lab Consultant"],
+        skills: ["Experimental Design", "Scientific Computation", "Paper Composition", "Grant Applications"],
+        subjects: ["Physics", "Chemistry", "Biology"],
+        themeColor: "#0f52ba",
+        courses: [
+          "Scientific Method & Experimental Design",
+          "Advanced Physics/Chemistry/Biology",
+          "Research Methodology & Data Analysis",
+          "Academic Writing & Grant Proposals",
+          "Scientific Computing & Modeling"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Learn advanced sciences and gain basic laboratory experience." },
+          { stage: "Academic Track", detail: "Conduct original scientific studies and complete a Doctoral degree." },
+          { stage: "Entry Role", detail: "Work as an Associate Scholar researching inside specialized laboratory facilities." },
+          { stage: "Growth", detail: "Write academic publications, secure research grants, and mentor students." },
+          { stage: "Senior / Lead", detail: "Direct global labs, publish breakthrough papers, and speak at symposiums." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Calibrate testing sensors and verify optical lab alignment." },
+          { time: "Midday", activity: "Analyze test measurements and write drafts for academic paper releases." },
+          { time: "Evening", activity: "Execute complex numeric models on a computational server cluster." },
+          { time: "Post Work", activity: "Write peer-review notes on an external academic draft request." }
+        ]
+      },
+      {
+        name: "Finance",
+        interests: ["Finance", "Mathematics", "Economics", "Business"],
+        description: "Managing money, investments, and risk — helping individuals and organizations make sound financial decisions.",
+        roles: ["Financial Analyst", "Investment Portfolio Lead", "Corporate Treasurer"],
+        skills: ["Spreadsheet Modeling", "Asset Valuation", "Risk Mitigation", "Market Trend Tracking"],
+        subjects: ["Mathematics", "Economics"],
+        themeColor: "#b25e07",
+        courses: [
+          "Principles of Accounting",
+          "Financial Markets & Institutions",
+          "Corporate Finance",
+          "Investment & Portfolio Management",
+          "Financial Modeling & Valuation"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Learn accounting basic concepts, formulas, and Excel spreadsheet navigation." },
+          { stage: "Training", detail: "Pursue a degree in economics or finance and secure initial internships." },
+          { stage: "Entry Role", detail: "Start as an Analyst compiling corporate financial models and trends." },
+          { stage: "Growth", detail: "Oversee transaction due diligence and present portfolio advice." },
+          { stage: "Senior / Lead", detail: "Decide asset distributions, structure mergers, and lead firms." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Examine market news feeds, interest rates, and commodity indexes." },
+          { time: "Midday", activity: "Input quarterly financial earnings data into corporate valuation sheets." },
+          { time: "Evening", activity: "Assemble a research deck outlining prospective tech stock acquisitions." },
+          { time: "Post Work", activity: "Present target recommendations to the investment committee board." }
+        ]
+      },
+      {
+        name: "Economics",
+        interests: ["Economics", "Mathematics", "Data & Statistics", "Research"],
+        description: "Studying how people, markets, and governments make choices about resources — and what that means for society.",
+        roles: ["Economist", "Public Policy Analyst", "Economic Consultant"],
+        skills: ["Econometrics", "Statistical Coding", "Market Modeling", "Analytical Writing"],
+        subjects: ["Economics", "Mathematics"],
+        themeColor: "#41505c",
+        courses: [
+          "Microeconomics Theory",
+          "Macroeconomics Principles",
+          "Econometrics & Statistical Methods",
+          "Public Policy Analysis",
+          "Behavioral Economics"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Learn supply-demand math models and regression calculations." },
+          { stage: "Education", detail: "Complete an economics degree with coursework in math and statistics." },
+          { stage: "Entry Role", detail: "Analyze macro-data and clean logs as a Junior Economic Analyst." },
+          { stage: "Growth", detail: "Author research reports, model policy consequences, and consult." },
+          { stage: "Senior / Lead", detail: "Forecast nationwide indicators and advise policy departments." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Download newly released inflation and labor statistics database reports." },
+          { time: "Midday", activity: "Run regression algorithms in R to evaluate recent housing tax policy." },
+          { time: "Evening", activity: "Meet with urban planners to discuss city infrastructure funding structures." },
+          { time: "Post Work", activity: "Draft an executive summary detailing economic trends for directors." }
+        ]
+      },
+      {
+        name: "Business & Management",
+        interests: ["Business", "Communication", "Entrepreneurship", "Economics"],
+        description: "Leading teams and organizations, making strategic decisions, and keeping operations running smoothly.",
+        roles: ["Business Analyst", "Project Manager", "Operations Director"],
+        skills: ["Team Leadership", "Strategic Planning", "Project Management", "Key Metrics Tracking"],
+        subjects: ["Business Studies", "Economics"],
+        themeColor: "#2f4f4f",
+        courses: [
+          "Introduction to Business Administration",
+          "Principles of Management",
+          "Strategic Planning & Execution",
+          "Organizational Behavior",
+          "Operations & Supply Chain Management"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Develop administration fundamentals, presentation skills, and scheduling habits." },
+          { stage: "Specialization", detail: "Study management strategies, marketing rules, and operational methods." },
+          { stage: "Entry Role", detail: "Work as an Operations Coordinator tracking metrics and project updates." },
+          { stage: "Growth", detail: "Manage complete projects, coordinate team workflows, and direct budgets." },
+          { stage: "Senior / Lead", detail: "Direct organization directions, allocate budgets, and guide teams." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Evaluate weekly KPI dashboard targets and check team progress." },
+          { time: "Midday", activity: "Lead a project sync meeting with product, engineering, and design." },
+          { time: "Evening", activity: "Outline the draft operational strategy for entering new markets next year." },
+          { time: "Post Work", activity: "Conduct manager check-ins and complete performance evaluations." }
+        ]
+      },
+      {
+        name: "Entrepreneurship",
+        interests: ["Entrepreneurship", "Business", "Problem Solving", "Communication"],
+        description: "Building something from scratch — spotting opportunities and turning ideas into products, services, or companies.",
+        roles: ["Startup Founder", "Product Manager", "Venture Partner"],
+        skills: ["Market Validation", "Fundraising", "Product Design", "Agile Execution"],
+        subjects: ["Business Studies", "Economics"],
+        themeColor: "#d35400",
+        courses: [
+          "Startup Fundamentals & Validation",
+          "Venture Capital & Seed Funding",
+          "Product Management for Startups",
+          "Customer Discovery & Lean Methodologies",
+          "Growth Marketing & Scaling"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Learn to identify user pain points and sketch solution prototypes." },
+          { stage: "Validation", detail: "Interview target audiences and test simple product ideas for demand." },
+          { stage: "Launch", detail: "Build a core company team, secure seed money, and deploy products." },
+          { stage: "Scaling", detail: "Manage operations, raise follow-on funding, and grow customers." },
+          { stage: "Exit / Serial", detail: "Lead company sales/IPOs, or move on to launch new ventures." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Pitch the startup product vision to a panel of seed investors." },
+          { time: "Midday", activity: "Iterate on user interface feedback with the design team." },
+          { time: "Evening", activity: "Interview candidates for a senior backend engineer job listing." },
+          { time: "Post Work", activity: "Analyze cash flow runway and draft updates for current investors." }
+        ]
+      },
+      {
+        name: "Psychology",
+        interests: ["Psychology", "Research", "Communication", "Writing"],
+        description: "Studying how people think, feel, and behave — with applications in therapy, research, education, and design.",
+        roles: ["Clinical Psychologist", "Counselor", "Behavioral Researcher"],
+        skills: ["Active Listening", "Clinical Evaluation", "Cognitive Assessment", "Academic Research"],
+        subjects: ["Psychology", "Biology"],
+        themeColor: "#5d3f8c",
+        courses: [
+          "Introduction to Psychology",
+          "Developmental Psychology",
+          "Research Methods in Psychology",
+          "Cognitive Psychology",
+          "Abnormal Psychology & Clinical Practice"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Develop deep interest in human behaviors, biology, and scientific writing." },
+          { stage: "Undergraduate", detail: "Complete a psychology degree, learning research protocols and theories." },
+          { stage: "Licensing Hours", detail: "Earn a Master's degree and accrue supervised clinical experience hours." },
+          { stage: "Therapist Role", detail: "Acquire a practice license, counsel clients, and build profiles." },
+          { stage: "Director / Expert", detail: "Manage therapy units, direct research studies, and publish findings." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Prepare client files and review specific behavioral strategies." },
+          { time: "Midday", activity: "Conduct clinical therapy sessions to assist client goals." },
+          { time: "Evening", activity: "Provide family support consultations and log diagnostics." },
+          { time: "Post Work", activity: "Document session outcomes and consult with peer therapists on cases." }
+        ]
+      },
+      {
+        name: "Law",
+        interests: ["Law", "Writing", "Communication", "Research"],
+        description: "Interpreting and applying rules that govern society, and advocating for people, businesses, or causes.",
+        roles: ["Attorney", "Corporate Counsel", "Legal Consultant"],
+        skills: ["Case Analysis", "Contract Drafting", "Court Presentation", "Legal Writing"],
+        subjects: ["English", "History"],
+        themeColor: "#4a3c31",
+        courses: [
+          "Constitutional Law Principles",
+          "Contracts & Torts",
+          "Legal Research & Citation",
+          "Criminal Law & Procedure",
+          "Intellectual Property & Corporate Law"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Develop advanced writing skills, critical analysis, and research habits." },
+          { stage: "Law School", detail: "Earn a Juris Doctor degree, studying case law and legal ethics." },
+          { stage: "Bar Exam", detail: "Pass the regional licensing exam to qualify as an active attorney." },
+          { stage: "Associate", detail: "Work in a law firm drafting briefs and conducting legal research." },
+          { stage: "Partner / Counsel", detail: "Manage clients, represent cases in court, and direct firm policies." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Search digital legal archives to isolate relevant judicial precedents." },
+          { time: "Midday", activity: "Draft acquisition contract definitions for corporate transactions." },
+          { time: "Evening", activity: "Represent a client in a deposition or coordinate case details." },
+          { time: "Post Work", activity: "Review trial brief feedback and organize tomorrow's hearing exhibits." }
+        ]
+      },
+      {
+        name: "UX/UI Design",
+        interests: ["Design", "Art", "Technology", "Communication", "Problem Solving"],
+        description: "Designing digital products that are clear, usable, and enjoyable — bridging visual craft with human behavior.",
+        roles: ["Product Designer", "UX Architect", "Design Systems Lead"],
+        skills: ["Figma Layouts", "User Journey Mapping", "Usability Diagnostics", "Visual Branding"],
+        subjects: ["Art & Design", "Computer Science"],
+        themeColor: "#1e272c",
+        courses: [
+          "Introduction to User Experience (UX)",
+          "Visual Design & UI Principles",
+          "User Research & Testing Methods",
+          "Interactive Prototyping (Figma)",
+          "Information Architecture Structures"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Study visual design layouts, color theory, and software controls." },
+          { stage: "Portfolio Build", detail: "Compose app layout studies and document step-by-step UX decisions." },
+          { stage: "Entry Role", detail: "Join a company as a Junior Designer mock-building wireframes and layouts." },
+          { stage: "Growth", detail: "Perform customer research tests, build design libraries, and own products." },
+          { stage: "Senior / Lead", detail: "Lead design strategies, coordinate cross-team pipelines, and manage staff." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Conduct remote user usability tests and catalog system navigation issues." },
+          { time: "Midday", activity: "Design high-fidelity desktop screen templates inside Figma." },
+          { time: "Evening", activity: "Present prototype transitions to developers to review logic." },
+          { time: "Post Work", activity: "Inspect staging environments to audit visual layout alignments." }
+        ]
+      },
+      {
+        name: "Environmental Science",
+        interests: ["Environment", "Biology", "Chemistry", "Research"],
+        description: "Studying ecosystems and human impact on the planet, and working toward more sustainable ways of living.",
+        roles: ["Environmental Analyst", "Sustainability Lead", "Conservation Specialist"],
+        skills: ["Field Sampling", "GIS Mapping", "Report Authoring", "Regulatory Compliance"],
+        subjects: ["Biology", "Chemistry", "Geography"],
+        themeColor: "#2d5e35",
+        courses: [
+          "Introduction to Environmental Science",
+          "Ecology & Conservation Biology",
+          "Environmental Chemistry & Analysis",
+          "Climate Change & Policy",
+          "Geographical Information Systems (GIS)"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Learn biology concepts, mapping systems, and chemical interactions." },
+          { stage: "GIS & Analysis", detail: "Earn a science degree and master geographic mapping software." },
+          { stage: "Entry Role", detail: "Work as a Field Inspector gathering environmental soil and water samples." },
+          { stage: "Growth", detail: "Draft impact statements, optimize compliance systems, and advise builders." },
+          { stage: "Senior / Lead", detail: "Oversee conservation programs, shape public policies, and direct projects." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Gather lake water samples from testing locations using field kits." },
+          { time: "Midday", activity: "Map conservation areas using specialized GIS software." },
+          { time: "Evening", activity: "Draft an environmental impact report for a planned park project." },
+          { time: "Post Work", activity: "Coordinate soil testing summaries and present to county planning leads." }
+        ]
+      },
+      {
+        name: "Technical Writing",
+        interests: ["Writing", "Technology", "Communication", "Research"],
+        description: "Turning complex, technical information into clear guides, documentation, and content people can actually use.",
+        roles: ["Technical Writer", "API Document Specialist", "Content Architect"],
+        skills: ["Clear Composition", "API Navigation", "Editing & Rewriting", "Information Structuring"],
+        subjects: ["English", "Computer Science"],
+        themeColor: "#4f5b66",
+        courses: [
+          "Principles of Technical Writing",
+          "Documentation & Single Sourcing",
+          "Information Design & Usability",
+          "Writing for APIs & Developers",
+          "Editing Technical Content"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Master plain-language writing rules and build basic technical literacy." },
+          { stage: "Portfolio Build", detail: "Compose markdown pages, write help documents, and explain coding codes." },
+          { stage: "Entry Role", detail: "Start as a Content Editor updating support manuals and help guides." },
+          { stage: "Growth", detail: "Document complex APIs, structure doc systems, and manage updates." },
+          { stage: "Senior / Lead", detail: "Direct doc system architectures, define style rules, and manage teams." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Test draft scripts using product versions to verify doc updates." },
+          { time: "Midday", activity: "Interview developers to understand how system APIs process requests." },
+          { time: "Evening", activity: "Draft a Markdown tutorial showing developers how to config servers." },
+          { time: "Post Work", activity: "Review reader comment logs and make formatting updates on guides." }
+        ]
+      },
+      {
+        name: "Architecture",
+        interests: ["Design", "Art", "Engineering", "Mathematics"],
+        description: "Designing buildings and spaces that are functional, safe, and shaped by both creativity and technical precision.",
+        roles: ["Architect", "CAD Modeler", "Urban Planner"],
+        skills: ["Spatial Conception", "BIM Software (Revit)", "Building Regulations", "Structural Mathematics"],
+        subjects: ["Mathematics", "Art & Design"],
+        themeColor: "#5a5050",
+        courses: [
+          "Architectural Design Studio I",
+          "History & Theory of Architecture",
+          "Building Materials & Structural Systems",
+          "Sustainable Design & Green Buildings",
+          "Digital Modeling & BIM (Revit)"
+        ],
+        careerPath: [
+          { stage: "Foundation", detail: "Practice mechanical drawing, visual composition, and geometric math." },
+          { stage: "Architecture Degree", detail: "Earn a university degree, mastering spatial models and building codes." },
+          { stage: "Apprenticeship", detail: "Draft detailed site models and log material data under licensed heads." },
+          { stage: "Licensed Practice", detail: "Certify designs, manage builders, and design structural prints." },
+          { stage: "Principal / Partner", detail: "Lead architectural bureaus, win design awards, and build landmarks." }
+        ],
+        dayInLife: [
+          { time: "Morning", activity: "Adjust structural vectors in a digital Revit layout file." },
+          { time: "Midday", activity: "Consult with engineers to verify foundation load limitations." },
+          { time: "Evening", activity: "Inspect an active downtown construction site to review blueprint match." },
+          { time: "Post Work", activity: "Develop a creative design layout for a new library commission pitch." }
+        ]
+      }
+    ];
+
+    /* ---------------------------------------------------------
+       2. INTERESTS DATA
+       --------------------------------------------------------- */
+    const INTERESTS = [
+      { name: "Mathematics", icon: "📐" },
+      { name: "Physics", icon: "🪐" },
+      { name: "Chemistry", icon: "🧪" },
+      { name: "Biology", icon: "🧬" },
+      { name: "Computer Science", icon: "💻" },
+      { name: "Programming", icon: "⌨️" },
+      { name: "Data & Statistics", icon: "📊" },
+      { name: "Artificial Intelligence", icon: "🤖" },
+      { name: "Engineering", icon: "⚙️" },
+      { name: "Medicine", icon: "🩺" },
+      { name: "Business", icon: "💼" },
+      { name: "Finance", icon: "💰" },
+      { name: "Economics", icon: "📈" },
+      { name: "Psychology", icon: "🧠" },
+      { name: "Writing", icon: "✍️" },
+      { name: "Communication", icon: "💬" },
+      { name: "Design", icon: "🎨" },
+      { name: "Art", icon: "🖌️" },
+      { name: "Technology", icon: "📱" },
+      { name: "Research", icon: "🔬" },
+      { name: "Problem Solving", icon: "🧩" },
+      { name: "Entrepreneurship", icon: "🚀" },
+      { name: "Environment", icon: "🌱" },
+      { name: "Law", icon: "⚖️" }
+    ];
+
+    /* ---------------------------------------------------------
+       3. APP STATE
+       --------------------------------------------------------- */
+    let selectedInterests = new Set();
+    let currentRecommendations = [];
+    let lastFocusedElement = null;
+
+    /* ---------------------------------------------------------
+       4. A-FRAME COMPONENT REGISTRATION (VR HUD ACTIONS)
+       --------------------------------------------------------- */
+    if (typeof AFRAME !== 'undefined') {
+      // Gaze exit component for inside WebXR session
+      AFRAME.registerComponent('gaze-exit', {
+        init: function () {
+          this.el.addEventListener('click', () => {
+            closeARScene();
+          });
+        }
+      });
+
+      // Idle animation component for floating text panels in AR
+      AFRAME.registerComponent('bobbing', {
+        schema: {
+          amplitude: { type: 'number', default: 0.12 },
+          speed: { type: 'number', default: 1800 }
+        },
+        init: function () {
+          this.el.object3D.position.y = this.el.object3D.position.y || 1.6;
+          this.initialY = this.el.object3D.position.y;
+          this.offset = Math.random() * Math.PI * 2;
+        },
+        tick: function (time, timeDelta) {
+          const y = this.initialY + Math.sin((time / this.schema.speed) + this.offset) * this.schema.amplitude;
+          this.el.object3D.position.y = y;
+        }
+      });
+    }
+
+    /* ---------------------------------------------------------
+       5. SELECTION HANDLING
+       --------------------------------------------------------- */
+    const interestGrid = document.getElementById("interestGrid");
+    const selectionCount = document.getElementById("selectionCount");
+    const selectionHint = document.getElementById("selectionHint");
+    const discoverBtn = document.getElementById("discoverBtn");
+
+    function renderInterestCards() {
+      INTERESTS.forEach((interest) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "interest-card";
+        card.setAttribute("aria-pressed", "false");
+        card.dataset.name = interest.name;
+
+        card.innerHTML = `
+      <span class="icon" aria-hidden="true">${interest.icon}</span>
+      <span class="name">${interest.name}</span>
+    `;
+
+        card.addEventListener("click", () => toggleInterest(card, interest.name));
+        interestGrid.appendChild(card);
+      });
+    }
+
+    function toggleInterest(card, name) {
+      const isSelected = selectedInterests.has(name);
+
+      if (isSelected) {
+        selectedInterests.delete(name);
+        card.setAttribute("aria-pressed", "false");
+      } else {
+        selectedInterests.add(name);
+        card.setAttribute("aria-pressed", "true");
+      }
+
+      updateSelectionUI();
+    }
+
+    function updateSelectionUI() {
+      const count = selectedInterests.size;
+      selectionCount.textContent = `${count} interest${count === 1 ? "" : "s"} selected`;
+
+      const hasEnough = count >= 2;
+      discoverBtn.disabled = !hasEnough;
+      selectionHint.textContent = hasEnough
+        ? "Great — you're ready to see your matches."
+        : "Select at least 2 interests to continue.";
+    }
+
+    /* ---------------------------------------------------------
+       6. MATCHING ENGINE
+       --------------------------------------------------------- */
+    function getRecommendations(selected) {
+      const scored = CAREERS.map((career) => {
+        const matches = career.interests.filter((interest) => selected.has(interest));
+        const score = Math.round((matches.length / career.interests.length) * 100);
+
+        return {
+          ...career,
+          matchedInterests: matches,
+          score
+        };
+      });
+
+      // Only consider careers with at least one matching interest.
+      const relevant = scored.filter((career) => career.matchedInterests.length > 0);
+
+      // Sort by matching score descending.
+      relevant.sort((a, b) => b.score - a.score);
+
+      return relevant.slice(0, 5);
+    }
+
+    function getMatchLabel(score) {
+      if (score >= 70) return { text: "Excellent Match", className: "match-excellent" };
+      if (score >= 40) return { text: "Strong Match", className: "match-strong" };
+      return { text: "Possible Match", className: "match-possible" };
+    }
+
+    function buildExplanation(career) {
+      const matched = career.matchedInterests;
+      let interestPhrase;
+
+      if (matched.length === 1) {
+        interestPhrase = `your interest in ${matched[0].toLowerCase()}`;
+      } else if (matched.length === 2) {
+        interestPhrase = `your interests in ${matched[0].toLowerCase()} and ${matched[1].toLowerCase()}`;
+      } else {
+        const last = matched[matched.length - 1].toLowerCase();
+        const rest = matched.slice(0, -1).map((i) => i.toLowerCase()).join(", ");
+        interestPhrase = `your interests in ${rest}, and ${last}`;
+      }
+
+      return `${interestPhrase.charAt(0).toUpperCase() + interestPhrase.slice(1)} make ${career.name.toLowerCase()} a field worth exploring.`;
+    }
+
+    /* ---------------------------------------------------------
+       7. RENDERING RESULTS & DETAILS MODAL
+       --------------------------------------------------------- */
+    const resultsSection = document.getElementById("results");
+    const resultsGrid = document.getElementById("resultsGrid");
+    const modalOverlay = document.getElementById("modalOverlay");
+    const modalContent = document.getElementById("modalContent");
+    const modalClose = document.getElementById("modalClose");
+
+    function renderResults(recommendations) {
+      resultsGrid.innerHTML = "";
+
+      recommendations.forEach((career, index) => {
+        const label = getMatchLabel(career.score);
+        const card = document.createElement("article");
+        card.className = "career-card";
+        card.style.animationDelay = `${index * 80}ms`;
+
+        const dialBackground = `conic-gradient(var(--color-teal) 0deg ${career.score * 3.6}deg, var(--color-border) ${career.score * 3.6}deg 360deg)`;
+
+        card.innerHTML = `
+      <div class="career-card-head">
+        <div class="match-dial" style="background: ${dialBackground}">
+          <span class="match-dial-label" aria-hidden="true">${career.score}%</span>
+        </div>
+        <div>
+          <h3 class="career-name">${career.name}</h3>
+          <span class="match-badge ${label.className}">${label.text}</span>
+        </div>
+      </div>
+
+      <p class="career-explanation">${buildExplanation(career)}</p>
+
+      <div>
+        <span class="tag-label">Skills</span>
+        <div class="tag-row">
+          ${career.skills.map((s) => `<span class="tag">${s}</span>`).join("")}
+        </div>
+      </div>
+
+      <div>
+        <span class="tag-label">Subjects</span>
+        <div class="tag-row">
+          ${career.subjects.map((s) => `<span class="tag">${s}</span>`).join("")}
+        </div>
+      </div>
+
+      <button class="btn explore-btn" data-career="${career.name}">Explore Career</button>
+    `;
+
+        resultsGrid.appendChild(card);
+      });
+
+      resultsGrid.querySelectorAll(".explore-btn").forEach((btn) => {
+        btn.addEventListener("click", () => openCareerModal(btn.dataset.career));
+      });
+    }
+
+    function openCareerModal(careerName) {
+      const career = currentRecommendations.find((c) => c.name === careerName);
+      if (!career) return;
+
+      const label = getMatchLabel(career.score);
+      const isAFrameLoaded = (typeof AFRAME !== 'undefined');
+
+      // Generate Career Detail Modal markup
+      let html = `
+    <h3 id="modalTitle">${career.name}</h3>
+    <span class="match-badge ${label.className}">${label.text}</span>
+
+    <div class="modal-section">
+      <span class="tag-label">Overview</span>
+      <p>${career.description}</p>
+    </div>
+
+    <div class="modal-section">
+      <span class="tag-label">Why it matches your profile</span>
+      <p>${buildExplanation(career)}</p>
+    </div>
+
+    <div class="modal-section">
+      <span class="tag-label">Common roles</span>
+      <div class="tag-row">${career.roles.map((r) => `<span class="tag">${r}</span>`).join("")}</div>
+    </div>
+
+    <div class="modal-section">
+      <span class="tag-label">Courses Worth Exploring</span>
+      <div class="course-grid">
+        ${career.courses.map((course) => `<span class="course-tag">${course}</span>`).join("")}
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <span class="tag-label">A Possible Career Path</span>
+      <div class="timeline">
+        ${career.careerPath.map((path) => `
+          <div class="timeline-item">
+            <div class="timeline-dot"></div>
+            <div class="timeline-stage">${path.stage}</div>
+            <div class="timeline-detail">${path.detail}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <span class="tag-label">Immersive Preview</span>
+  `;
+
+      if (isAFrameLoaded) {
+        html += `
+      <button class="btn btn-ar" id="launchARBtn">Experience a Day →</button>
+      <p class="ar-notice">
+        <strong>Headset Testing Note:</strong> WebXR requires a secure context (HTTPS or localhost).
+        Running directly from <code>file://</code> opens the interactive 3D magic window, but cannot launch VR passthrough.
+        To test on Meta Quest 3, host locally via <code>python -m http.server</code>.
+      </p>
+    `;
+      } else {
+        html += `
+      <button class="btn btn-ar" id="launchARBtn" disabled>Experience a Day (Offline)</button>
+      <div class="ar-unsupported-banner">
+        ⚠️ <strong>A-Frame Framework Offline:</strong> The WebXR 3D renderer script could not be fetched from the CDN.
+        The career matching engine remains operational, but the immersive 3D preview is disabled.
+      </div>
+    `;
+      }
+
+      html += `</div>`;
+
+      modalContent.innerHTML = html;
+
+      // Bind the AR launcher event
+      if (isAFrameLoaded) {
+        document.getElementById("launchARBtn").addEventListener("click", () => {
+          closeCareerModal();
+          launchARScene(career);
+        });
+      }
+
+      lastFocusedElement = document.activeElement;
+      modalOverlay.hidden = false;
+      document.body.style.overflow = "hidden";
+      modalClose.focus();
+    }
+
+    function closeCareerModal() {
+      modalOverlay.hidden = true;
+      document.body.style.overflow = "";
+      if (lastFocusedElement) lastFocusedElement.focus();
+    }
+
+    modalClose.addEventListener("click", closeCareerModal);
+
+    modalOverlay.addEventListener("click", (event) => {
+      if (event.target === modalOverlay) closeCareerModal();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modalOverlay.hidden) closeCareerModal();
+    });
+
+    /* ---------------------------------------------------------
+       8. AR SCENE HANDLING (WEBXR / VR DETAILED ENGINE)
+       --------------------------------------------------------- */
+
+    /* ---------------------------------------------------------
+       8.1 AR TIME OF DAY ENVIRONMENTS & TRANSITION CONTROLS
+       --------------------------------------------------------- */
+    const AR_SCENES = {
+      "Morning": {
+        skyColor: "#FF9A76",     // Warm sunrise peach
+        ambientColor: "#5D6D7E",  // Soft morning ambient
+        lightIntensity: 0.5,
+        lightPosition: "-2 1 -1", // Low angle side-light
+        lightColor: "#FAD7A0"     // Soft yellow sunlight
+      },
+      "Midday": {
+        skyColor: "#5DADE2",     // Bright clear blue sky
+        ambientColor: "#AEB6BF",  // Bright daytime ambient
+        lightIntensity: 0.8,
+        lightPosition: "0 4 -0.5", // Noon sun directly overhead
+        lightColor: "#FFFFFF"     // Crisp white light
+      },
+      "Evening": {
+        skyColor: "#8E44AD",     // Sunset orange-purple
+        ambientColor: "#34495E",  // Sunset dusky ambient
+        lightIntensity: 0.45,
+        lightPosition: "2 0.8 -1", // Low golden light
+        lightColor: "#E67E22"     // Deep golden amber light
+      },
+      "Post Work": {
+        skyColor: "#1A252F",     // Dusk/Night sky
+        ambientColor: "#1C2833",  // Dim ambient night light
+        lightIntensity: 0.25,
+        lightPosition: "0 3 1",   // Soft overhead moonlight
+        lightColor: "#AED6F1"     // Soft light-blue moonlight
+      }
+    };
+
+    let activeARCareer = null;
+    let activeTimeOfDay = "Morning";
+
+    function transitionToTime(time) {
+      if (!activeARCareer) return;
+      activeTimeOfDay = time;
+
+      const config = AR_SCENES[time];
+      const entry = activeARCareer.dayInLife.find(d => d.time === time);
+      if (!entry) return;
+
+      // Update Sky color smoothly
+      const sky = document.getElementById("arSky");
+      if (sky) {
+        sky.setAttribute('animation', {
+          property: 'material.color',
+          to: config.skyColor,
+          dur: 800,
+          easing: 'easeInOutQuad'
+        });
+      }
+
+      // Update Directional Light parameters smoothly
+      const dirLight = document.getElementById("arLight");
+      if (dirLight) {
+        dirLight.setAttribute('animation__pos', {
+          property: 'position',
+          to: config.lightPosition,
+          dur: 800,
+          easing: 'easeInOutQuad'
+        });
+        dirLight.setAttribute('animation__color', {
+          property: 'light.color',
+          to: config.lightColor,
+          dur: 800,
+          easing: 'easeInOutQuad'
+        });
+        dirLight.setAttribute('animation__intensity', {
+          property: 'light.intensity',
+          to: config.lightIntensity,
+          dur: 800,
+          easing: 'easeInOutQuad'
+        });
+      }
+
+      // Update Ambient Light color smoothly
+      const ambLight = document.getElementById("arAmbientLight");
+      if (ambLight) {
+        ambLight.setAttribute('animation', {
+          property: 'light.color',
+          to: config.ambientColor,
+          dur: 800,
+          easing: 'easeInOutQuad'
+        });
+      }
+
+      // Update Central Focus Panel texts
+      const timeBadgeText = document.getElementById("arTimeBadgeText");
+      const activityText = document.getElementById("arActivityText");
+
+      if (timeBadgeText) timeBadgeText.setAttribute('value', entry.time);
+      if (activityText) activityText.setAttribute('value', entry.activity);
+
+      // Update interactive 3D buttons coloring states
+      const times = ["Morning", "Midday", "Evening", "Post Work"];
+      times.forEach((t) => {
+        const btnId = `btn-${t.replace(' ', '')}`;
+        const btn = document.getElementById(btnId);
+        if (btn) {
+          const isSelected = (t === time);
+          btn.setAttribute('color', isSelected ? '#F2994A' : '#1B1F38');
+          const txt = btn.querySelector('a-text');
+          if (txt) {
+            txt.setAttribute('color', isSelected ? '#14172B' : '#F3F5FA');
+          }
+        }
+      });
+    }
+
+    function launchARScene(career) {
+      if (typeof AFRAME === 'undefined') return;
+
+      activeARCareer = career;
+      activeTimeOfDay = "Morning";
+
+      const container = document.getElementById("arSceneContainer");
+      container.hidden = false;
+      container.style.display = "block";
+      document.body.style.overflow = "hidden";
+
+      const themeColor = career.themeColor || "#1b2f40";
+      const morningEntry = career.dayInLife.find(d => d.time === "Morning") || career.dayInLife[0];
+
+      // Gaze-activated Exit Panel for VR
+      const vrExitHTML = `
+    <a-entity id="vrExitButton" position="0 0.45 -2.0" rotation="-22 0 0" gaze-exit class="raycastable">
+      <a-ring radius-inner="0.2" radius-outer="0.23" color="#F2994A" material="roughness: 0.5"></a-ring>
+      <a-cylinder radius="0.19" height="0.05" rotation="90 0 0" color="#1B1F38" material="roughness: 0.3"
+                  animation__hover="property: scale; to: 1.08 1.08 1.08; dur: 150; startEvents: mouseenter"
+                  animation__leave="property: scale; to: 1 1 1; dur: 150; startEvents: mouseleave"
+                  animation__click="property: position; to: 0 0 -0.03; dur: 80; dir: alternate; loop: 2; startEvents: click">
+      </a-cylinder>
+      <a-text value="EXIT AR" align="center" width="1.6" color="#F3F5FA" font="kelson" position="0 0 0.03"></a-text>
+    </a-entity>
+  `;
+
+      // Setup dynamic A-Frame scene
+      container.innerHTML = `
+    <a-scene embedded style="width: 100%; height: 100%;" cursor="rayOrigin: mouse" raycaster="objects: .raycastable">
+      <!-- Camera & Gaze Cursor setup -->
+      <a-entity camera look-controls position="0 1.6 0">
+        <a-entity cursor="fuse: true; fuseTimeout: 1400"
+                  position="0 0 -0.8"
+                  geometry="primitive: ring; radiusInner: 0.012; radiusOuter: 0.02"
+                  material="color: #F2994A; shader: flat; opacity: 0.75"
+                  raycaster="objects: .raycastable"
+                  animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dir: alternate; from: 1 1 1; to: 0.1 0.1 0.1; dur: 1400"
+                  animation__reset="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 200">
+        </a-entity>
+      </a-entity>
+
+      <!-- Colored environment sky matching Morning initially -->
+      <a-sky id="arSky" color="${AR_SCENES['Morning'].skyColor}"></a-sky>
+      
+      <!-- Spatial environment floor -->
+      <a-plane rotation="-90 0 0" width="100" height="100" color="#14172B" material="roughness: 0.95; metalness: 0.05"></a-plane>
+      <a-plane rotation="-90 0 0" width="30" height="30" color="#2FBF9F" material="wireframe: true; opacity: 0.08" position="0 0.01 0"></a-plane>
+
+      <!-- Ambient and Directional Lights -->
+      <a-entity id="arAmbientLight" light="type: ambient; color: ${AR_SCENES['Morning'].ambientColor}"></a-entity>
+      <a-entity id="arLight" light="type: directional; color: ${AR_SCENES['Morning'].lightColor}; intensity: ${AR_SCENES['Morning'].lightIntensity}" position="${AR_SCENES['Morning'].lightPosition}"></a-entity>
+
+      <!-- Central Focus Panel displaying the active task -->
+      <a-entity id="mainFocusPanel" position="0 1.55 -2.4" bobbing="amplitude: 0.05; speed: 2000">
+        <a-plane width="1.8" height="0.8" color="#1B1F38" material="opacity: 0.92; transparent: true; roughness: 0.7" class="raycastable"></a-plane>
+        <a-plane width="1.76" height="0.76" position="0 0 0.005" color="${themeColor}" material="opacity: 0.2; transparent: true"></a-plane>
+        
+        <!-- Active Time Label Tag -->
+        <a-plane width="0.5" height="0.18" position="-0.52 0.24 0.01" color="#F2994A" material="opacity: 0.95">
+          <a-text id="arTimeBadgeText" value="Morning" align="center" width="1.6" color="#14172B" font="kelson" anchor="center"></a-text>
+        </a-plane>
+        
+        <!-- Active Task description text -->
+        <a-text id="arActivityText" value="${morningEntry.activity}" position="-0.8 -0.05 0.01" width="1.6" color="#F3F5FA" font="kelson" wrap-count="24" anchor="left" baseline="center"></a-text>
+      </a-entity>
+
+      <!-- Floating 3D Time Selector Row -->
+      <a-entity position="0 0.95 -2.1">
+        <!-- Morning Button -->
+        <a-plane id="btn-Morning" time-selector="time: Morning" position="-0.66 0 0" width="0.4" height="0.16" color="#F2994A" material="opacity: 0.9; roughness: 0.5" class="raycastable">
+          <a-text value="Morning" align="center" width="1.4" color="#14172B" font="kelson" position="0 0 0.01"></a-text>
+        </a-plane>
+        
+        <!-- Midday Button -->
+        <a-plane id="btn-Midday" time-selector="time: Midday" position="-0.22 0 0" width="0.4" height="0.16" color="#1B1F38" material="opacity: 0.9; roughness: 0.5" class="raycastable">
+          <a-text value="Midday" align="center" width="1.4" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
+        </a-plane>
+
+        <!-- Evening Button -->
+        <a-plane id="btn-Evening" time-selector="time: Evening" position="0.22 0 0" width="0.4" height="0.16" color="#1B1F38" material="opacity: 0.9; roughness: 0.5" class="raycastable">
+          <a-text value="Evening" align="center" width="1.4" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
+        </a-plane>
+
+        <!-- Post Work Button -->
+        <a-plane id="btn-PostWork" time-selector="time: Post Work" position="0.66 0 0" width="0.4" height="0.16" color="#1B1F38" material="opacity: 0.9; roughness: 0.5" class="raycastable">
+          <a-text value="Post Work" align="center" width="1.4" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
+        </a-plane>
+      </a-entity>
+
+      <!-- Overhead Title Panel -->
+      <a-entity position="0 2.2 -2.6" bobbing="amplitude: 0.03; speed: 2800">
+        <a-plane width="2.2" height="0.38" color="#14172B" material="opacity: 0.95; transparent: true" class="raycastable"></a-plane>
+        <a-text value="${career.name.toUpperCase()}" align="center" width="2.8" color="#F2994A" font="kelson" bold="true" anchor="center"></a-text>
+      </a-entity>
+
+      <!-- Gaze Exit cylinder -->
+      ${vrExitHTML}
+    </a-scene>
+
+    <!-- HTML Exit Button for normal screen preview -->
+    <button class="ar-close-button" onclick="closeARScene()" aria-label="Exit AR Scene">✕ Close Preview</button>
+  `;
+    }
+
+    function closeARScene() {
+      const container = document.getElementById("arSceneContainer");
+
+      // Safely stop and destroy the scene context
+      const sceneEl = container.querySelector('a-scene');
+      if (sceneEl) {
+        try {
+          sceneEl.parentNode.removeChild(sceneEl);
+        } catch (e) {
+          console.warn("A-Frame teardown exception:", e);
+        }
+      }
+
+      activeARCareer = null;
+      container.innerHTML = "";
+      container.hidden = true;
+      container.style.display = "none";
+      document.body.style.overflow = "";
+    }
+
+    /* ---------------------------------------------------------
+       9. RESET & GENERAL NAVIGATION
+       --------------------------------------------------------- */
+    const restartBtn = document.getElementById("restartBtn");
+
+    function resetExploration() {
+      selectedInterests.clear();
+      currentRecommendations = [];
+
+      document.querySelectorAll(".interest-card").forEach((card) => {
+        card.setAttribute("aria-pressed", "false");
+      });
+
+      updateSelectionUI();
+
+      resultsSection.hidden = true;
+      resultsGrid.innerHTML = "";
+
+      document.getElementById("interests").scrollIntoView({ behavior: "smooth" });
+    }
+
+    restartBtn.addEventListener("click", resetExploration);
+
+    const startExploringBtn = document.getElementById("startExploringBtn");
+    startExploringBtn.addEventListener("click", () => {
+      document.getElementById("interests").scrollIntoView({ behavior: "smooth" });
+    });
+
+    discoverBtn.addEventListener("click", () => {
+      currentRecommendations = getRecommendations(selectedInterests);
+      renderResults(currentRecommendations);
+      resultsSection.hidden = false;
+      resultsSection.scrollIntoView({ behavior: "smooth" });
+    });
+
+    // Mobile navbar controls
+    const navToggle = document.getElementById("navToggle");
+    const primaryNav = document.getElementById("primaryNav");
+
+    navToggle.addEventListener("click", () => {
+      const isOpen = primaryNav.classList.toggle("open");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    primaryNav.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", () => {
+        primaryNav.classList.remove("open");
+        navToggle.setAttribute("aria-expanded", "false");
+      });
+    });
+
+    /* ---------------------------------------------------------
+       INIT
+       --------------------------------------------------------- */
+
+    // Theme Toggle click handler
+    const themeToggle = document.getElementById("themeToggle");
+    if (themeToggle) {
+      themeToggle.addEventListener("click", () => {
+        const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+        const newTheme = (currentTheme === "dark") ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", newTheme);
+        localStorage.setItem("careal-theme", newTheme);
+      });
+    }
+
+    renderInterestCards();
+    updateSelectionUI();
+  </script>
+</body>
+
+</html>
