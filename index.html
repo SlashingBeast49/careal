@@ -1029,6 +1029,73 @@
       transform: scale(1.05);
     }
 
+    .ar-hud-nav {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(20, 23, 43, 0.92);
+      padding: 8px 18px;
+      border-radius: 999px;
+      border: 1px solid var(--color-border);
+      z-index: 10000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      max-width: 90vw;
+      overflow-x: auto;
+    }
+
+    .ar-hud-hint {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      margin-right: 4px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .ar-hud-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f3f5fa;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 999px;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .ar-hud-btn:hover {
+      background: var(--color-amber);
+      color: #14172B;
+      border-color: var(--color-amber);
+      transform: translateY(-1px);
+    }
+
+    .ar-zone-banner {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 23, 43, 0.88);
+      padding: 8px 24px;
+      border-radius: 999px;
+      border: 1px solid var(--color-amber);
+      color: #F3F5FA;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      pointer-events: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      transition: opacity 0.4s ease;
+    }
+
     /* =========================================================
    Footer
    ========================================================= */
@@ -1962,9 +2029,7 @@
     /* ---------------------------------------------------------
        4. A-FRAME COMPONENT REGISTRATION (VR HUD ACTIONS)
        --------------------------------------------------------- */
-    function initAFrameComponents() {
-      if (typeof AFRAME === 'undefined') return;
-
+    if (typeof AFRAME !== 'undefined') {
       // Gaze exit component for inside WebXR session
       AFRAME.registerComponent('gaze-exit', {
         init: function () {
@@ -1990,24 +2055,6 @@
           this.el.object3D.position.y = y;
         }
       });
-
-      // Time selector component for switching tasks in VR
-      AFRAME.registerComponent('time-selector', {
-        schema: {
-          time: { type: 'string' }
-        },
-        init: function () {
-          this.el.addEventListener('click', () => {
-            transitionToTime(this.data.time);
-          });
-        }
-      });
-    }
-
-    if (typeof AFRAME !== 'undefined') {
-      initAFrameComponents();
-    } else {
-      document.addEventListener('DOMContentLoaded', initAFrameComponents);
     }
 
     /* ---------------------------------------------------------
@@ -2194,6 +2241,16 @@
     </div>
 
     <div class="modal-section">
+      <span class="tag-label">Relevant High School / College Subjects</span>
+      <div class="tag-row">${career.subjects.map((s) => `<span class="tag">${s}</span>`).join("")}</div>
+    </div>
+
+    <div class="modal-section">
+      <span class="tag-label">Key Skills</span>
+      <div class="tag-row">${career.skills.map((s) => `<span class="tag">${s}</span>`).join("")}</div>
+    </div>
+
+    <div class="modal-section">
       <span class="tag-label">Courses Worth Exploring</span>
       <div class="course-grid">
         ${career.courses.map((course) => `<span class="course-tag">${course}</span>`).join("")}
@@ -2271,41 +2328,113 @@
     });
 
     /* ---------------------------------------------------------
-       8. AR SCENE HANDLING (WEBXR / VR DETAILED ENGINE)
+       8. AR / VR 2-SCENE EXPLORABLE WORLD & DETAILED 3D ENGINE
        --------------------------------------------------------- */
 
+    function teleportCameraTo(posStr, sceneName) {
+      const rig = document.getElementById('cameraRig');
+      if (!rig) return;
+      const parts = posStr.split(' ').map(Number);
+      rig.setAttribute('animation', {
+        property: 'position',
+        to: { x: parts[0], y: parts[1], z: parts[2] },
+        dur: 600,
+        easing: 'easeInOutQuad'
+      });
+      const zoneBanner = document.getElementById('arZoneIndicator');
+      if (zoneBanner) {
+        zoneBanner.textContent = `📍 ${sceneName}`;
+        zoneBanner.style.opacity = '1';
+        setTimeout(() => { if (zoneBanner) zoneBanner.style.opacity = '0.9'; }, 2000);
+      }
+    }
+
+    function getEnvironmentShellHTML() {
+      return `
+        <!-- Bright Studio Architectural Environment (Spacious 14m x 10m Studio) -->
+        <!-- Light Modern Oak Parquet Floor -->
+        <a-plane position="2.25 0 0" rotation="-90 0 0" width="16" height="12" color="#e7e5e4" material="roughness: 0.7; metalness: 0.05"></a-plane>
+        <a-plane position="2.25 0.005 0" rotation="-90 0 0" width="15" height="11" color="#cbd5e1" material="wireframe: true; opacity: 0.15"></a-plane>
+        
+        <!-- Floor Zone Inlay Line -->
+        <a-box position="2.25 0.008 0" width="14" height="0.004" depth="0.06" color="#38bdf8" opacity="0.4"></a-box>
+        <a-box position="2.25 0.008 0" width="0.06" height="0.004" depth="10" color="#F2994A" opacity="0.4"></a-box>
+
+        <!-- Studio Perimeter Soft Walls -->
+        <a-box position="2.25 2.2 -6.0" width="16" height="4.4" depth="0.2" color="#f8fafc"></a-box>
+        <a-box position="-5.75 2.2 0" width="0.2" height="4.4" depth="12" color="#f1f5f9"></a-box>
+        <a-box position="10.25 2.2 0" width="0.2" height="4.4" depth="12" color="#f1f5f9"></a-box>
+        <a-box position="2.25 2.2 6.0" width="16" height="4.4" depth="0.2" color="#f8fafc"></a-box>
+
+        <!-- Studio Skyline Window on Back Wall -->
+        <a-plane position="2.25 2.4 -5.88" width="12" height="2.4" color="#e0f2fe" material="roughness: 0.1; opacity: 0.95"></a-plane>
+        <a-box position="-1.75 2.4 -5.86" width="0.05" height="2.4" depth="0.03" color="#94a3b8"></a-box>
+        <a-box position="2.25 2.4 -5.86" width="0.05" height="2.4" depth="0.03" color="#94a3b8"></a-box>
+        <a-box position="6.25 2.4 -5.86" width="0.05" height="2.4" depth="0.03" color="#94a3b8"></a-box>
+
+        <!-- Recessed Ceiling Diffuser Lights -->
+        <a-box position="0 3.8 -2" width="3.2" height="0.04" depth="0.8" color="#ffffff" material="emissive: #ffffff; emissiveIntensity: 0.7"></a-box>
+        <a-box position="4.5 3.8 -2" width="3.2" height="0.04" depth="0.8" color="#ffffff" material="emissive: #ffffff; emissiveIntensity: 0.7"></a-box>
+
+        <!-- Interactive Floor Teleport Waypoint: Scene 1 (Main Workstation) -->
+        <a-entity position="0 0.02 0.6" teleport-waypoint="targetPos: 0 0 1.8; zoneName: Scene 1: Main Workstation" class="raycastable">
+          <a-circle radius="0.45" color="#2FBF9F" material="opacity: 0.85" rotation="-90 0 0"></a-circle>
+          <a-ring radius-inner="0.47" radius-outer="0.53" color="#F2994A" rotation="-90 0 0"></a-ring>
+          <a-text value="[TELEPORT] 📍 SCENE 1" align="center" width="2.2" color="#14172B" rotation="-90 0 0" position="0 0.01 0"></a-text>
+        </a-entity>
+
+        <!-- Interactive Floor Teleport Waypoint: Scene 2 (Specialized Facility) -->
+        <a-entity position="4.5 0.02 0.6" teleport-waypoint="targetPos: 4.5 0 1.8; zoneName: Scene 2: Specialized Facility" class="raycastable">
+          <a-circle radius="0.45" color="#38bdf8" material="opacity: 0.85" rotation="-90 0 0"></a-circle>
+          <a-ring radius-inner="0.47" radius-outer="0.53" color="#F2994A" rotation="-90 0 0"></a-ring>
+          <a-text value="[TELEPORT] 📍 SCENE 2" align="center" width="2.2" color="#14172B" rotation="-90 0 0" position="0 0.01 0"></a-text>
+        </a-entity>
+      `;
+    }
+
     function getCareerVisualsHTML(careerName, themeColor) {
-      // Reusable base desk with keyboard, mouse, mousepad, and desk lamp
+      // Reusable base workstation desk with warm wood, ergonomic chair, coffee mug, potted plant, and lamp
       const baseDesk = `
-        <!-- Main Workstation Desk -->
+        <!-- SCENE 1: PRIMARY WORKSTATION -->
         <a-entity position="0 0 -1.7">
-          <!-- Desktop Tabletop -->
-          <a-box width="2.1" height="0.05" depth="0.85" position="0 0.75 0" color="#23272e" material="roughness: 0.5; metalness: 0.1"></a-box>
-          <!-- Metal Legs & Frame -->
-          <a-cylinder radius="0.025" height="0.75" position="-0.95 0.375 -0.35" color="#111827" material="metalness: 0.8; roughness: 0.3"></a-cylinder>
-          <a-cylinder radius="0.025" height="0.75" position="0.95 0.375 -0.35" color="#111827" material="metalness: 0.8; roughness: 0.3"></a-cylinder>
-          <a-cylinder radius="0.025" height="0.75" position="-0.95 0.375 0.35" color="#111827" material="metalness: 0.8; roughness: 0.3"></a-cylinder>
-          <a-cylinder radius="0.025" height="0.75" position="0.95 0.375 0.35" color="#111827" material="metalness: 0.8; roughness: 0.3"></a-cylinder>
+          <!-- Desktop Tabletop (Warm Natural Oak Finish) -->
+          <a-box width="2.1" height="0.05" depth="0.85" position="0 0.75 0" color="#a16207" material="roughness: 0.4; metalness: 0.05"></a-box>
+          <!-- Brushed White Metal Legs -->
+          <a-cylinder radius="0.025" height="0.75" position="-0.95 0.375 -0.35" color="#e2e8f0" material="metalness: 0.7; roughness: 0.3"></a-cylinder>
+          <a-cylinder radius="0.025" height="0.75" position="0.95 0.375 -0.35" color="#e2e8f0" material="metalness: 0.7; roughness: 0.3"></a-cylinder>
+          <a-cylinder radius="0.025" height="0.75" position="-0.95 0.375 0.35" color="#e2e8f0" material="metalness: 0.7; roughness: 0.3"></a-cylinder>
+          <a-cylinder radius="0.025" height="0.75" position="0.95 0.375 0.35" color="#e2e8f0" material="metalness: 0.7; roughness: 0.3"></a-cylinder>
           <!-- Desk Mat / Mousepad -->
-          <a-plane position="0 0.776 0.08" width="0.75" height="0.32" rotation="-90 0 0" color="#181a20"></a-plane>
-          <!-- Keyboard -->
-          <a-box position="-0.1 0.788 0.08" width="0.42" height="0.015" depth="0.14" color="#282c34">
-            <a-box position="0 0.008 0" width="0.39" height="0.005" depth="0.12" color="#abb2bf" opacity="0.3"></a-box>
+          <a-plane position="0 0.776 0.08" width="0.75" height="0.32" rotation="-90 0 0" color="#1e293b"></a-plane>
+          <!-- Mechanical Keyboard -->
+          <a-box position="-0.1 0.788 0.08" width="0.42" height="0.015" depth="0.14" color="#334155">
+            <a-box position="0 0.008 0" width="0.39" height="0.005" depth="0.12" color="#f8fafc" opacity="0.6"></a-box>
           </a-box>
-          <!-- Mouse -->
-          <a-box position="0.22 0.788 0.08" width="0.07" height="0.02" depth="0.11" color="#1e1e24"></a-box>
-          <!-- Coffee Mug -->
+          <!-- Ergonomic Mouse -->
+          <a-box position="0.22 0.788 0.08" width="0.07" height="0.02" depth="0.11" color="#0f172a"></a-box>
+          <!-- Ceramic Coffee Mug -->
           <a-cylinder position="0.55 0.82 0.15" radius="0.045" height="0.1" color="#F2994A" material="roughness: 0.3">
             <a-torus position="0.045 0 0" radius="0.03" radius-tubular="0.008" color="#F2994A" rotation="0 90 0"></a-torus>
           </a-cylinder>
+          <!-- Potted Monstera Plant -->
+          <a-entity position="0.85 0.86 -0.2">
+            <a-cylinder radius="0.06" height="0.12" color="#f8fafc"></a-cylinder>
+            <a-sphere position="0 0.1 0" radius="0.09" color="#16a34a" scale="1 1.4 1"></a-sphere>
+          </a-entity>
           <!-- Modern Articulated Desk Lamp -->
           <a-entity position="-0.85 0.77 -0.2">
-            <a-cylinder radius="0.07" height="0.02" color="#111827"></a-cylinder>
-            <a-cylinder radius="0.012" height="0.45" position="0.05 0.22 0" rotation="0 0 -18" color="#374151"></a-cylinder>
-            <a-cylinder radius="0.012" height="0.35" position="0.18 0.5 0" rotation="0 0 35" color="#374151"></a-cylinder>
-            <a-cone position="0.28 0.62 0" radius-bottom="0.07" radius-top="0.03" height="0.1" color="#1f2937" rotation="45 -45 0">
-              <a-sphere position="0 -0.04 0" radius="0.025" color="#fff" material="emissive: #fff; emissiveIntensity: 0.8"></a-sphere>
+            <a-cylinder radius="0.07" height="0.02" color="#334155"></a-cylinder>
+            <a-cylinder radius="0.012" height="0.45" position="0.05 0.22 0" rotation="0 0 -18" color="#64748b"></a-cylinder>
+            <a-cylinder radius="0.012" height="0.35" position="0.18 0.5 0" rotation="0 0 35" color="#64748b"></a-cylinder>
+            <a-cone position="0.28 0.62 0" radius-bottom="0.07" radius-top="0.03" height="0.1" color="#334155" rotation="45 -45 0">
+              <a-sphere position="0 -0.04 0" radius="0.025" color="#fff" material="emissive: #fff; emissiveIntensity: 0.9"></a-sphere>
             </a-cone>
+          </a-entity>
+          <!-- Scene 1 Placard -->
+          <a-entity position="0 2.1 0" bobbing="amplitude: 0.03; speed: 2300">
+            <a-plane width="1.9" height="0.32" color="#1B1F38" opacity="0.94">
+              <a-text value="SCENE 1: PRIMARY WORKSTATION\nDaily Focus Tasks & Technical Production" align="center" width="1.75" color="#2FBF9F" font="kelson"></a-text>
+            </a-plane>
           </a-entity>
         </a-entity>
       `;
@@ -2313,515 +2442,565 @@
       switch (careerName) {
         case "Software Engineering":
           return `
-            \${baseDesk}
-            <!-- Dual Monitor Dev Setup -->
+            ${baseDesk}
+            <!-- Scene 1: Dual Monitor Dev Setup -->
             <a-entity position="0 1.18 -1.75">
-              <!-- Left Monitor (VS Code IDE) -->
-              <a-box position="-0.48 0 0" rotation="0 8 0" width="0.88" height="0.54" depth="0.03" color="#111">
-                <a-plane position="0 0 0.016" width="0.84" height="0.5" color="#1e1e1e">
-                  <!-- Simulated Code Lines -->
-                  <a-text value="async function handleRequest(req, res) {\\n  const session = await auth.verify(req);\\n  const data = await db.query(session.id);\\n  if (!data) return res.status(404);\\n  return res.json({ status: 'ok', data });\\n}" position="-0.4 0.18 0.002" width="0.8" color="#9cdcfe" font="monospace" wrap-count="42"></a-text>
+              <a-box position="-0.48 0 0" rotation="0 8 0" width="0.88" height="0.54" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="0.84" height="0.5" color="#0f172a">
+                  <a-text value="async function handleRequest(req, res) {\n  const session = await auth.verify(req);\n  const data = await db.query(session.id);\n  if (!data) return res.status(404);\n  return res.json({ status: 'ok', data });\n}" position="-0.4 0.18 0.002" width="0.8" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
-              <!-- Right Monitor (Terminal & Git) -->
-              <a-box position="0.48 0 0" rotation="0 -8 0" width="0.88" height="0.54" depth="0.03" color="#111">
-                <a-plane position="0 0 0.016" width="0.84" height="0.5" color="#0d1117">
-                  <a-text value="$ git commit -m 'feat: add user stream API'\\n[main a4f82d1] 4 files changed, +182 lines\\n$ npm test -- --coverage\\nPASS tests/api.test.ts (12 passed)\\nCoverage: 94.8% of statements\\nServer listening on port 8080..." position="-0.4 0.18 0.002" width="0.8" color="#2FBF9F" font="monospace" wrap-count="42"></a-text>
+              <a-box position="0.48 0 0" rotation="0 -8 0" width="0.88" height="0.54" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="0.84" height="0.5" color="#022c22">
+                  <a-text value="$ git commit -m 'feat: user API stream'\n[main a4f82d1] +182 lines\n$ npm test -- --coverage\nPASS tests/api.test.ts (12 passed)\nCoverage: 94.8% of statements" position="-0.4 0.18 0.002" width="0.8" color="#4ade80" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Whiteboard on left (Sprint Kanban) -->
-            <a-entity position="-1.7 1.4 -1.8" rotation="0 35 0">
-              <a-box width="1.1" height="0.8" depth="0.02" color="#f9fafb">
-                <a-text value="SPRINT BOARD\\n[TODO]   [PROGRESS]  [DONE]\\n* Auth    * API Cache  * CI/CD\\n* Schema  * Refactor   * Unit Tests" position="-0.5 0.3 0.015" width="1.0" color="#111827" font="kelson"></a-text>
+
+            <!-- SCENE 2: SERVER DATA CENTER & NOC FACILITY -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="-0.75 1.1 0" width="0.6" height="2.2" depth="0.8" color="#1e293b">
+                <a-sphere position="0 0.8 0.42" radius="0.02" color="#22c55e" animation="property: material.opacity; from: 1; to: 0.2; dur: 400; loop: true"></a-sphere>
+                <a-sphere position="0.1 0.8 0.42" radius="0.02" color="#06b6d4" animation="property: material.opacity; from: 0.2; to: 1; dur: 600; loop: true"></a-sphere>
+                <a-text value="RACK 01: CORE CLUSTER\nStatus: OPTIMAL | Temp: 21C" position="-0.26 0.4 0.42" width="0.75" color="#f8fafc"></a-text>
               </a-box>
-            </a-entity>
-            <!-- Standing Server Tower on right -->
-            <a-entity position="1.6 0.8 -1.8" rotation="0 -35 0">
-              <a-box width="0.4" height="1.4" depth="0.5" color="#111827">
-                <a-sphere position="-0.1 0.5 0.26" radius="0.015" color="#00ff00" animation="property: material.opacity; from: 1; to: 0.2; dur: 400; loop: true"></a-sphere>
-                <a-sphere position="0 0.5 0.26" radius="0.015" color="#00ffff" animation="property: material.opacity; from: 0.2; to: 1; dur: 600; loop: true"></a-sphere>
-                <a-sphere position="0.1 0.5 0.26" radius="0.015" color="#F2994A" animation="property: material.opacity; from: 1; to: 0.3; dur: 300; loop: true"></a-sphere>
-                <a-text value="SERVER NODE 01\\nCPU: 24% | RAM: 14GB" position="-0.16 0.3 0.26" width="0.45" color="#9ca3af" font="monospace"></a-text>
+              <a-box position="0 1.1 0" width="0.6" height="2.2" depth="0.8" color="#1e293b">
+                <a-sphere position="0 0.8 0.42" radius="0.02" color="#22c55e" animation="property: material.opacity; from: 1; to: 0.3; dur: 500; loop: true"></a-sphere>
+                <a-sphere position="0.1 0.8 0.42" radius="0.02" color="#eab308" animation="property: material.opacity; from: 0.3; to: 1; dur: 700; loop: true"></a-sphere>
+                <a-text value="RACK 02: STORAGE ARRAY\nNVMe Pool: 48TB (Active)" position="-0.26 0.4 0.42" width="0.75" color="#f8fafc"></a-text>
               </a-box>
+              <a-box position="0.75 1.1 0" width="0.6" height="2.2" depth="0.8" color="#1e293b">
+                <a-sphere position="0 0.8 0.42" radius="0.02" color="#38bdf8" animation="property: material.opacity; from: 1; to: 0.2; dur: 350; loop: true"></a-sphere>
+                <a-text value="RACK 03: EDGE GATEWAY\n10 Gbps Uplink Active" position="-0.26 0.4 0.42" width="0.75" color="#f8fafc"></a-text>
+              </a-box>
+              <!-- Scene 2 Placard -->
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: SERVER DATA CENTER & NOC\nCloud Infrastructure & Network Operations" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Data Science":
           return `
-            \${baseDesk}
-            <!-- Ultrawide Curved Data Analytics Display -->
+            ${baseDesk}
+            <!-- Scene 1: Ultrawide Analytics Display -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.4" height="0.6" depth="0.03" color="#111">
-                <a-plane position="0 0 0.016" width="1.35" height="0.55" color="#181825">
-                  <a-text value="JUPYTER NOTEBOOK — Customer_LTV_Prediction.ipynb\\nimport pandas as pd\\nimport xgboost as xgb\\nmodel = xgb.XGBRegressor(n_estimators=500, lr=0.03)\\nmodel.fit(X_train, y_train)\\nValidation RMSE: 0.0418 | AUC-ROC: 0.942" position="-0.65 0.22 0.002" width="1.2" color="#89dceb" font="monospace" wrap-count="48"></a-text>
-                  <!-- Visual Data Heatmap Grid -->
-                  <a-plane position="0.38 -0.08 0.003" width="0.4" height="0.25" color="#313244">
-                    <a-plane position="-0.1 0.06 0.001" width="0.16" height="0.08" color="#F2994A"></a-plane>
-                    <a-plane position="0.1 0.06 0.001" width="0.16" height="0.08" color="#2FBF9F"></a-plane>
-                    <a-plane position="-0.1 -0.06 0.001" width="0.16" height="0.08" color="#2FBF9F"></a-plane>
-                    <a-plane position="0.1 -0.06 0.001" width="0.16" height="0.08" color="#cba6f7"></a-plane>
-                  </a-plane>
+              <a-box width="1.4" height="0.6" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="1.35" height="0.55" color="#0f172a">
+                  <a-text value="JUPYTER NOTEBOOK — Customer_LTV_Prediction.ipynb\nimport pandas as pd; import xgboost as xgb\nmodel = xgb.XGBRegressor(n_estimators=500, lr=0.03)\nmodel.fit(X_train, y_train)\nValidation RMSE: 0.0418 | AUC-ROC: 0.942" position="-0.65 0.22 0.002" width="1.2" color="#38bdf8" font="monospace" wrap-count="48"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- 3D Holographic Covariance Cluster floating above desk -->
-            <a-entity position="0 1.8 -2.4" animation="property: rotation; to: 0 360 0; dur: 16000; loop: true; easing: linear">
-              <a-sphere position="0.3 0.2 0" radius="0.06" color="#F2994A"></a-sphere>
-              <a-sphere position="-0.3 -0.15 0.2" radius="0.07" color="#2FBF9F"></a-sphere>
-              <a-sphere position="0 -0.25 -0.3" radius="0.05" color="#cba6f7"></a-sphere>
-              <a-sphere position="-0.25 0.3 -0.15" radius="0.06" color="#89dceb"></a-sphere>
-              <a-cylinder radius="0.005" height="0.6" position="0 0 0" color="#6c7086" opacity="0.4"></a-cylinder>
-            </a-entity>
-            <!-- Stack of Math & ML Books on Desk -->
-            <a-entity position="-0.75 0.85 -1.6">
-              <a-box width="0.22" height="0.04" depth="0.28" color="#1e3a8a"></a-box>
-              <a-box width="0.2" height="0.04" depth="0.26" position="0 0.04 0" color="#047857"></a-box>
-              <a-box width="0.18" height="0.035" depth="0.24" position="0 0.078 0" color="#b45309"></a-box>
+
+            <!-- SCENE 2: ENTERPRISE ANALYTICS WAR ROOM -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 1.5 0" width="2.4" height="1.4" depth="0.04" color="#0f172a">
+                <a-plane position="0 0 0.025" width="2.3" height="1.3" color="#0284c7">
+                  <a-text value="ENTERPRISE METRICS WALL\n* 18 A/B Growth Experiments Running\n* Daily ETL Ingestion: 4.8 TB (Airflow)\n* Retention Lift: +14.2% YoY" position="-1.05 0.45 0.002" width="2.1" color="#ffffff" font="monospace"></a-text>
+                </a-plane>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: ANALYTICS WAR ROOM\nMetrics Projection & Executive Decision Hub" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Artificial Intelligence & Machine Learning":
           return `
-            \${baseDesk}
-            <!-- Multi-Display AI Research Setup -->
+            ${baseDesk}
+            <!-- Scene 1: PyTorch Model Monitor -->
             <a-entity position="0 1.2 -1.75">
-              <!-- Center Display (PyTorch Model & TensorBoard) -->
-              <a-box position="0 0 0" width="1.0" height="0.58" depth="0.03" color="#111">
-                <a-plane position="0 0 0.016" width="0.95" height="0.53" color="#0b0f19">
-                  <a-text value="MODEL: Transformer-XL (8.2B Params)\\n[Epoch 42/100] Loss: 0.182 | Perp: 4.12\\nGPU 0-7 Cluster: 98% Util | Temp: 62C\\nLayer_Norm -> MultiheadAttn -> SwiGLU" position="-0.45 0.2 0.002" width="0.9" color="#c084fc" font="monospace" wrap-count="38"></a-text>
+              <a-box width="1.0" height="0.58" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="0.95" height="0.53" color="#0f172a">
+                  <a-text value="MODEL: Transformer-XL (8.2B Params)\n[Epoch 42/100] Loss: 0.182 | Perp: 4.12\nGPU 0-7 Cluster: 98% Util | Temp: 62C" position="-0.45 0.2 0.002" width="0.9" color="#c084fc" font="monospace" wrap-count="38"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- High-End Liquid-Cooled GPU Rig on side -->
-            <a-entity position="1.5 0.8 -1.7" rotation="0 -35 0">
-              <a-box width="0.4" height="0.6" depth="0.6" color="#18181b">
-                <a-plane position="0 0 0.305" width="0.36" height="0.54" color="#09090b" opacity="0.8">
-                  <!-- Glowing Liquid Cooling Tubes -->
-                  <a-torus position="0 0 0.01" radius="0.12" radius-tubular="0.015" color="#a855f7" material="emissive: #a855f7; emissiveIntensity: 0.6"></a-torus>
-                </a-plane>
+
+            <!-- SCENE 2: HIGH-DENSITY GPU SUPERCLUSTER -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="-0.6 1.1 0" width="0.7" height="2.2" depth="0.9" color="#18181b">
+                <a-torus position="0 0 0.46" radius="0.14" radius-tubular="0.02" color="#a855f7" material="emissive: #a855f7; emissiveIntensity: 0.8"></a-torus>
+                <a-text value="GPU POD A\n8x H100 SXM5" position="-0.3 0.6 0.46" width="0.8" color="#c084fc"></a-text>
               </a-box>
-            </a-entity>
-            <!-- 3D Neural Connectivity Graph -->
-            <a-entity position="0 1.85 -2.4" animation="property: rotation; to: 0 360 0; dur: 18000; loop: true; easing: linear">
-              <a-sphere radius="0.18" color="#a855f7" material="opacity: 0.6; transparent: true"></a-sphere>
-              <a-sphere position="0.4 0.2 0" radius="0.04" color="#2FBF9F"></a-sphere>
-              <a-sphere position="-0.4 -0.2 0" radius="0.04" color="#F2994A"></a-sphere>
-              <a-sphere position="0 0.35 0.3" radius="0.04" color="#38bdf8"></a-sphere>
-              <a-torus radius="0.45" radius-tubular="0.008" color="#c084fc" opacity="0.5" rotation="45 45 0"></a-torus>
+              <a-box position="0.6 1.1 0" width="0.7" height="2.2" depth="0.9" color="#18181b">
+                <a-torus position="0 0 0.46" radius="0.14" radius-tubular="0.02" color="#38bdf8" material="emissive: #38bdf8; emissiveIntensity: 0.8"></a-torus>
+                <a-text value="GPU POD B\n8x H100 SXM5" position="-0.3 0.6 0.46" width="0.8" color="#38bdf8"></a-text>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: GPU TRAINING CLUSTER\nDistributed Deep Learning & Neural Simulation" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Cybersecurity":
           return `
-            \${baseDesk}
-            <!-- Security Operations Center Console -->
+            ${baseDesk}
+            <!-- Scene 1: SIEM Console -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.2" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.2" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.15" height="0.55" color="#030712">
-                  <a-text value="SIEM SECURITY MONITOR — LIVE THREAT RADAR\\n[ALERT] High-Severity: Port 443 Inbound Flood\\n[BLOCKED] 192.168.1.144 -> Intrusion Rule #849\\nThreat Vector: Mitigated | Firewall: ENFORCED\\nAuth Tokens: Verified (FIDO2 Keys Active)" position="-0.55 0.2 0.002" width="1.1" color="#ef4444" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="SIEM MONITOR — LIVE THREAT RADAR\n[ALERT] High-Severity: Port 443 Flood\n[BLOCKED] 192.168.1.144 -> Rule #849\nThreat Vector: Mitigated | Firewall: ENFORCED" position="-0.55 0.2 0.002" width="1.1" color="#ef4444" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Threat Status Beacon on Desk -->
-            <a-entity position="0.65 0.85 -1.5">
-              <a-cylinder radius="0.04" height="0.1" color="#1f2937"></a-cylinder>
-              <a-sphere position="0 0.08 0" radius="0.03" color="#22c55e" material="emissive: #22c55e; emissiveIntensity: 0.8" animation="property: material.opacity; from: 1; to: 0.4; dur: 800; loop: true"></a-sphere>
+
+            <!-- SCENE 2: SECURITY OPERATIONS COMMAND (SOC) -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 1.5 0" width="2.4" height="1.4" depth="0.04" color="#050814">
+                <a-plane position="0 0 0.025" width="2.3" height="1.3" color="#0f172a">
+                  <a-text value="GLOBAL THREAT RADAR & INCIDENT OPS\n* Active Intrusion Rules: 14,820\n* Isolated Quarantine Nodes: 3\n* Status: DEFCON 3 — Elevated Monitoring" position="-1.05 0.45 0.002" width="2.1" color="#ef4444" font="monospace"></a-text>
+                </a-plane>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: SOC COMMAND RADAR\nThreat Hunting & Incident Remediation" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
-            <!-- Hardware Security Keys (YubiKey on desk) -->
-            <a-box position="0.35 0.785 -1.45" width="0.04" height="0.008" depth="0.08" color="#0284c7"></a-box>
           `;
 
         case "Mechanical Engineering":
           return `
-            \${baseDesk}
-            <!-- SolidWorks CAD Display with 3D Assembly -->
+            ${baseDesk}
+            <!-- Scene 1: SolidWorks CAD Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
-                <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#1e293b">
-                  <a-text value="SOLIDWORKS 2026 — Turbine_Gearbox_Assembly.sldasm\\nMass: 4.82 kg | Stress (Von Mises): 142 MPa\\nSafety Factor: 2.85 | Material: Titanium Ti-6Al-4V\\nMesh: 428,000 tetrahedral elements (FEA PASS)" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#0f172a">
+                  <a-text value="SOLIDWORKS 2026 — Turbine_Gearbox.sldasm\nMass: 4.82 kg | Stress: 142 MPa (PASS)\nSafety Factor: 2.85 | Titanium Ti-6Al-4V" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Digital Caliper & Tools on Desk -->
-            <a-entity position="-0.5 0.785 -1.45" rotation="0 25 0">
-              <a-box width="0.25" height="0.008" depth="0.03" color="#94a3b8" material="metalness: 0.9; roughness: 0.2"></a-box>
-              <a-box position="-0.1 0 0.02" width="0.04" height="0.01" depth="0.05" color="#0f172a"></a-box>
-            </a-entity>
-            <!-- 3D Printer Prototype Unit on side cart -->
-            <a-entity position="1.6 0.85 -1.8" rotation="0 -35 0">
-              <a-box width="0.5" height="0.6" depth="0.5" color="#334155">
-                <a-box position="0 0 0.26" width="0.35" height="0.4" depth="0.02" color="#0f172a" opacity="0.6"></a-box>
-                <!-- Prototype Gear inside printer -->
-                <a-cylinder position="0 0 0" radius="0.08" height="0.04" color="#F2994A" animation="property: rotation; to: 0 360 0; dur: 5000; loop: true; easing: linear"></a-cylinder>
+
+            <!-- SCENE 2: CNC PROTOTYPING & FAB LAB -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="-0.6 0.85 0" width="1.2" height="0.85" depth="0.8" color="#334155">
+                <a-box position="0 0.45 0" width="0.8" height="0.5" depth="0.6" color="#0f172a"></a-box>
+                <a-text value="CNC MILLING STATION" position="-0.35 0.6 0.32" width="0.8" color="#38bdf8"></a-text>
               </a-box>
+              <a-box position="0.6 0.85 0" width="0.8" height="0.85" depth="0.8" color="#b91c1c">
+                <a-text value="TOOL CHEST\nCalipers & Bits" position="-0.3 0.4 0.42" width="0.75" color="#fff"></a-text>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: PROTOTYPING FAB LAB\nPrecision Machining, CNC & 3D Print Farm" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Electrical Engineering":
           return `
-            \${baseDesk}
-            <!-- 4-Channel Digital Oscilloscope -->
-            <a-entity position="-0.4 1.15 -1.75">
+            ${baseDesk}
+            <!-- Scene 1: Oscilloscope Monitor -->
+            <a-entity position="-0.3 1.15 -1.75">
               <a-box width="0.65" height="0.45" depth="0.25" color="#334155">
                 <a-plane position="0 0 0.13" width="0.5" height="0.32" color="#022c22">
-                  <!-- Sine Wave Screen -->
-                  <a-text value="CH1: 3.3V 50MHz Sine\\nCH2: SPI Clock 10MHz\\nV_pp: 3.28V | Freq: 50.02MHz" position="-0.22 0.1 0.002" width="0.45" color="#4ade80" font="monospace"></a-text>
+                  <a-text value="CH1: 3.3V 50MHz Sine\nCH2: SPI Clock 10MHz\nV_pp: 3.28V | Freq: 50.02MHz" position="-0.22 0.1 0.002" width="0.45" color="#4ade80" font="monospace"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Soldering Station on right -->
-            <a-entity position="0.55 0.88 -1.5">
-              <a-box width="0.18" height="0.12" depth="0.16" color="#0f172a">
-                <a-text value="360 C" position="-0.06 0.02 0.082" width="0.3" color="#f97316"></a-text>
+
+            <!-- SCENE 2: HARDWARE ELECTRONICS TEST BENCH -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 0.85 0" width="2.0" height="0.85" depth="0.8" color="#1e293b">
+                <a-box position="-0.5 0.55 0" width="0.5" height="0.3" depth="0.3" color="#334155">
+                  <a-text value="DC POWER SUPPLY\n12.0V 5.0A" position="-0.2 0.05 0.16" width="0.4" color="#f59e0b"></a-text>
+                </a-box>
+                <a-box position="0.5 0.55 0" width="0.5" height="0.3" depth="0.3" color="#334155">
+                  <a-text value="LOGIC ANALYZER\n16 Channels Active" position="-0.2 0.05 0.16" width="0.4" color="#38bdf8"></a-text>
+                </a-box>
               </a-box>
-              <!-- Solder Iron Cradle -->
-              <a-cylinder position="0.12 0.06 0" radius="0.015" height="0.15" rotation="-30 0 0" color="#94a3b8"></a-cylinder>
-            </a-entity>
-            <!-- Breadboard with Microcontroller on desk -->
-            <a-entity position="0.05 0.785 -1.45">
-              <a-box width="0.24" height="0.015" depth="0.15" color="#f8fafc"></a-box>
-              <a-box position="0 0.015 0" width="0.08" height="0.01" depth="0.04" color="#0f172a"></a-box>
-              <a-sphere position="0.06 0.018 0.03" radius="0.008" color="#22c55e" material="emissive: #22c55e; emissiveIntensity: 0.8"></a-sphere>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: ELECTRONICS TEST BENCH\nSignal Integrity & Microcontroller Validation" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Chemical Engineering":
           return `
-            \${baseDesk}
-            <!-- Process Control SCADA Screen -->
+            ${baseDesk}
+            <!-- Scene 1: SCADA Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#064e3b">
-                  <a-text value="ASPEN PLUS — Petrochemical Distillation Train\\nReactor #2: 340 C | Pressure: 42.5 bar | Yield: 94.2%\\nReflux Ratio: 3.4 : 1 | Mass Flow: 1,280 kg/hr\\nSafety Interlocks: ALL ACTIVE (SIL-3 Rated)" position="-0.5 0.2 0.002" width="0.95" color="#a7f3d0" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="ASPEN PLUS — Distillation Train\nReactor #2: 340 C | Pressure: 42.5 bar\nYield: 94.2% | Mass Flow: 1,280 kg/hr" position="-0.5 0.2 0.002" width="0.95" color="#a7f3d0" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Test Tube Rack with solutions on desk -->
-            <a-entity position="-0.6 0.85 -1.5">
-              <a-box width="0.25" height="0.08" depth="0.08" color="#94a3b8" opacity="0.6"></a-box>
-              <a-cylinder position="-0.08 0.04 0" radius="0.015" height="0.14" color="#38bdf8" opacity="0.8"></a-cylinder>
-              <a-cylinder position="0 0.04 0" radius="0.015" height="0.14" color="#f59e0b" opacity="0.8"></a-cylinder>
-              <a-cylinder position="0.08 0.04 0" radius="0.015" height="0.14" color="#10b981" opacity="0.8"></a-cylinder>
+
+            <!-- SCENE 2: CHEMICAL PROCESS PILOT PLANT -->
+            <a-entity position="4.5 0 -1.7">
+              <a-cylinder position="-0.5 1.1 0" radius="0.25" height="2.0" color="#64748b" material="metalness: 0.8">
+                <a-text value="REACTOR 01\n340 C" position="-0.2 0.3 0.28" width="0.7" color="#fef08a"></a-text>
+              </a-cylinder>
+              <a-cylinder position="0.5 1.1 0" radius="0.25" height="2.0" color="#64748b" material="metalness: 0.8">
+                <a-text value="DISTILLATION\n42.5 bar" position="-0.2 0.3 0.28" width="0.7" color="#a7f3d0"></a-text>
+              </a-cylinder>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: CHEMICAL PROCESS PLANT\nContinuous Reaction & Industrial Distillation" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
-            <!-- Safety Goggles on desk -->
-            <a-box position="0.45 0.785 -1.45" width="0.16" height="0.04" depth="0.06" color="#0284c7" opacity="0.5"></a-box>
           `;
 
         case "Medicine & Healthcare":
           return `
-            \${baseDesk}
-            <!-- Electronic Medical Record & Live Vitals Monitor -->
+            ${baseDesk}
+            <!-- Scene 1: EMR Monitor -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#0f172a">
-                  <a-text value="EPIC EHR — Inpatient Medical Monitoring\\nPatient: J. Doe | Age: 44 | HR: 72 BPM [NSR]\\nBP: 120/80 mmHg | SpO2: 99% | Temp: 37.0 C\\nLabs: Troponin (-), Electrolytes WNL, ECG Normal" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="EPIC EHR — Medical Monitoring\nPatient: J. Doe | Age: 44 | HR: 72 BPM\nBP: 120/80 mmHg | SpO2: 99% | Temp: 37.0 C" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Stethoscope on Chart Clipboard on desk -->
-            <a-entity position="-0.45 0.785 -1.45" rotation="0 15 0">
-              <a-box width="0.22" height="0.01" depth="0.3" color="#64748b"></a-box>
-              <a-plane position="0 0.008 0" width="0.18" height="0.26" rotation="-90 0 0" color="#f8fafc"></a-plane>
-              <a-torus position="0.05 0.02 0" radius="0.06" radius-tubular="0.008" color="#0f172a" rotation="90 0 0"></a-torus>
-            </a-entity>
-            <!-- Backlit MRI X-Ray Lightbox on wall -->
-            <a-entity position="1.6 1.4 -1.8" rotation="0 -35 0">
-              <a-box width="0.8" height="0.6" depth="0.04" color="#e2e8f0">
-                <a-plane position="0 0 0.025" width="0.72" height="0.52" color="#0f172a">
-                  <a-sphere position="0 0 0.001" radius="0.15" color="#94a3b8" opacity="0.6"></a-sphere>
-                  <a-text value="MRI BRAIN SCAN\\nAXIAL T2 SEQUENCE" position="-0.3 -0.2 0.002" width="0.6" color="#38bdf8"></a-text>
-                </a-plane>
+
+            <!-- SCENE 2: HOSPITAL PATIENT WARD -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 0.45 0" width="1.1" height="0.5" depth="1.8" color="#e2e8f0"></a-box>
+              <a-cylinder position="-0.7 1.0 -0.4" radius="0.015" height="1.8" color="#94a3b8">
+                <a-box position="0 0.6 0" width="0.1" height="0.18" depth="0.05" color="#38bdf8" opacity="0.6"></a-box>
+              </a-cylinder>
+              <a-box position="0.7 0.8 -0.4" width="0.4" height="0.8" depth="0.4" color="#f8fafc">
+                <a-text value="72 BPM\n99% SpO2" position="-0.12 0.3 0.22" width="0.35" color="#22c55e"></a-text>
               </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: PATIENT EXAMINATION WARD\nInpatient Clinical Rounds & Bedside Diagnostics" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Biotechnology":
           return `
-            \${baseDesk}
-            <!-- Bioinformatic Analysis Monitor -->
+            ${baseDesk}
+            <!-- Scene 1: Benchling Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#1e1b4b">
-                  <a-text value="BENCHLING / NGS PIPELINE — CRISPR Target Screen\\nGuide RNA: 5'-GTCGATCGATCGATTAGC-3'\\nOn-Target Efficiency: 88.4% | Off-Target: <0.01%\\nCell Viability: 96.2% | Next: FACS Sorting" position="-0.5 0.2 0.002" width="0.95" color="#c084fc" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="BENCHLING NGS — CRISPR Screen\nGuide RNA: 5'-GTCGATCGATTAGC-3'\nOn-Target: 88.4% | Off-Target: <0.01%" position="-0.5 0.2 0.002" width="0.95" color="#c084fc" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Binocular Research Microscope on desk -->
-            <a-entity position="-0.6 0.95 -1.5">
-              <a-box width="0.18" height="0.05" depth="0.2" color="#e2e8f0"></a-box>
-              <a-cylinder position="0 0.15 -0.05" radius="0.02" height="0.25" color="#94a3b8"></a-cylinder>
-              <!-- Eyepieces -->
-              <a-cylinder position="-0.03 0.28 0.02" radius="0.012" height="0.1" rotation="-30 0 0" color="#0f172a"></a-cylinder>
-              <a-cylinder position="0.03 0.28 0.02" radius="0.012" height="0.1" rotation="-30 0 0" color="#0f172a"></a-cylinder>
-            </a-entity>
-            <!-- Micropipette Carousel Stand on right -->
-            <a-entity position="0.6 0.95 -1.5">
-              <a-cylinder radius="0.01" height="0.35" color="#94a3b8"></a-cylinder>
-              <a-cylinder position="0 0.15 0" radius="0.08" height="0.02" color="#3b82f6"></a-cylinder>
+
+            <!-- SCENE 2: BIOSAFETY CLEANROOM & CELL LAB -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 1.0 0" width="1.5" height="1.6" depth="0.8" color="#334155">
+                <a-plane position="0 0 0.42" width="1.3" height="0.8" color="#38bdf8" opacity="0.3"></a-plane>
+                <a-text value="BIOSAFETY HOOD (CLASS II)" position="-0.55 0.6 0.42" width="1.1" color="#c084fc"></a-text>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: BIOSAFETY CELL CULTURE LAB\nSterile Gene Editing, Assays & Incubation" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Scientific Research":
           return `
-            \${baseDesk}
-            <!-- Spectrometer & Data Acquisition Screen -->
+            ${baseDesk}
+            <!-- Scene 1: Spectrometer Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#0f172a">
-                  <a-text value="SPECTRA SUITE — High-Resolution Photon Analysis\\nLaser: 532 nm Nd:YAG | Integration: 100 ms\\nPeak Intensity: 48,200 counts @ 642.1 nm\\nSignal-to-Noise: 142 : 1 | Vacuum: 1.2e-8 mbar" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="SPECTRA SUITE — Photon Analysis\nLaser: 532 nm Nd:YAG | Int: 100 ms\nPeak: 48,200 counts @ 642.1 nm" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Optical Laser Breadboard Setup on desk -->
-            <a-entity position="-0.5 0.785 -1.45">
-              <a-box width="0.35" height="0.015" depth="0.25" color="#334155" material="metalness: 0.9"></a-box>
-              <a-cylinder position="-0.1 0.03 0" radius="0.015" height="0.05" color="#ef4444"></a-cylinder>
-              <a-cylinder position="0.1 0.03 0" radius="0.01" height="0.05" color="#94a3b8"></a-cylinder>
-            </a-entity>
-            <!-- Large Physics Derivation Blackboard on left -->
-            <a-entity position="-1.7 1.4 -1.8" rotation="0 35 0">
-              <a-box width="1.2" height="0.8" depth="0.03" color="#064e3b">
-                <a-text value="i h d/dt |psi> = H |psi>\\nE^2 = (pc)^2 + (m_0 c^2)^2\\n[x_i, p_j] = i h delta_ij" position="-0.5 0.2 0.02" width="1.0" color="#f8fafc" font="kelson"></a-text>
+
+            <!-- SCENE 2: OPTICAL & LASER EXPERIMENTAL LAB -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 0.8 0" width="1.8" height="0.8" depth="0.9" color="#334155" material="metalness: 0.9">
+                <a-cylinder position="-0.4 0.45 0" radius="0.03" height="0.1" color="#ef4444"></a-cylinder>
+                <a-box position="0 0.45 0" width="0.08" height="0.08" depth="0.08" color="#38bdf8" opacity="0.7"></a-box>
               </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: LASER OPTICS EXPERIMENTAL LAB\nBeam Superposition & Spectroscopy Analysis" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Finance":
           return `
-            \${baseDesk}
-            <!-- Quad Bloomberg Professional Terminal -->
+            ${baseDesk}
+            <!-- Scene 1: Valuation Screen -->
             <a-entity position="0 1.2 -1.75">
-              <!-- Top-Left: Stock Candlestick Chart -->
-              <a-box position="-0.45 0.18 0" width="0.85" height="0.32" depth="0.02" color="#111">
-                <a-plane position="0 0 0.012" width="0.81" height="0.28" color="#020617">
-                  <a-text value="AAPL US Equity — 15m Candlestick\\nO: 188.4 | H: 191.2 | L: 187.8 | C: 190.9\\nVol: 48.2M | RSI(14): 64.2 [BULLISH]" position="-0.38 0.08 0.002" width="0.75" color="#f59e0b" font="monospace"></a-text>
-                </a-plane>
-              </a-box>
-              <!-- Top-Right: DCF Valuation Excel Model -->
-              <a-box position="0.45 0.18 0" width="0.85" height="0.32" depth="0.02" color="#111">
-                <a-plane position="0 0 0.012" width="0.81" height="0.28" color="#052e16">
-                  <a-text value="M&A LBO MODEL — Target Valuation\\nWACC: 8.5% | Terminal Growth: 2.5%\\nImplied EV: $4.8B | Projected IRR: 24.8%" position="-0.38 0.08 0.002" width="0.75" color="#4ade80" font="monospace"></a-text>
-                </a-plane>
-              </a-box>
-              <!-- Bottom Row: Order Book Depth & Ticker -->
-              <a-box position="0 -0.16 0" width="1.75" height="0.28" depth="0.02" color="#111">
-                <a-plane position="0 0 0.012" width="1.7" height="0.24" color="#0f172a">
-                  <a-text value="S&P 500: 5,124.8 (+0.8%) | NASDAQ: 16,340 (+1.2%) | 10Y UST: 4.22% | EUR/USD: 1.084" position="-0.8 0.04 0.002" width="1.6" color="#38bdf8" font="monospace"></a-text>
+              <a-box width="1.2" height="0.6" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="1.15" height="0.55" color="#020617">
+                  <a-text value="M&A LBO VALUATION MODEL\nWACC: 8.5% | Terminal Growth: 2.5%\nImplied EV: $4.8B | Projected IRR: 24.8%" position="-0.55 0.2 0.002" width="1.1" color="#f59e0b" font="monospace"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Financial HP-12C Calculator on desk -->
-            <a-box position="0.4 0.785 -1.45" width="0.14" height="0.012" depth="0.18" color="#1e293b"></a-box>
+
+            <!-- SCENE 2: WALL STREET TRADING FLOOR CONSOLE -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 1.5 0" width="2.4" height="1.4" depth="0.04" color="#030712">
+                <a-plane position="0 0 0.025" width="2.3" height="1.3" color="#022c22">
+                  <a-text value="LIVE MARKET TICKER WALL\n* S&P 500: 5,124.8 (+0.8%)\n* NASDAQ: 16,340 (+1.2%)\n* 10Y UST: 4.22% | EUR/USD: 1.084" position="-1.05 0.45 0.002" width="2.1" color="#4ade80" font="monospace"></a-text>
+                </a-plane>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: WALL STREET TRADING FLOOR\nReal-Time Market Depth & Capital Execution" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
+            </a-entity>
           `;
 
         case "Economics":
           return `
-            \${baseDesk}
-            <!-- Econometric Forecasting Workspace -->
+            ${baseDesk}
+            <!-- Scene 1: Econometric Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#0f172a">
-                  <a-text value="STATA / R — Vector Autoregression (VAR)\\nInflation (CPI) vs Unemployment (U3) Regression\\nCoefficient: -0.428 (p < 0.001) | R^2: 0.84\\nFederal Funds Rate Transmission Forecast: -25 bps" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="STATA VAR REGRESSION\nCPI Inflation vs Unemployment (U3)\nRate Transmission Forecast: -25 bps" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Central Bank Policy Briefing Dossier on desk -->
-            <a-entity position="-0.5 0.785 -1.45" rotation="0 10 0">
-              <a-box width="0.24" height="0.02" depth="0.3" color="#334155"></a-box>
-              <a-plane position="0 0.012 0" width="0.2" height="0.26" rotation="-90 0 0" color="#f8fafc">
-                <a-text value="POLICY BRIEF\\nQ3 OUTLOOK" position="-0.08 0.05 0.001" width="0.25" color="#0f172a"></a-text>
-              </a-plane>
+
+            <!-- SCENE 2: MACRO POLICY BRIEFING CENTER -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 1.5 0" width="2.4" height="1.4" depth="0.04" color="#0f172a">
+                <a-text value="CENTRAL BANK POLICY BRIEFING\n* Quarterly GDP Growth: +2.8%\n* Core PCE Deflator: 2.4% YoY\n* Labor Participation: 62.8%" position="-1.05 0.45 0.03" width="2.1" color="#38bdf8" font="monospace"></a-text>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: MACRO POLICY BRIEFING HUB\nFiscal Forecasting & Central Bank Projections" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Business & Management":
           return `
-            \${baseDesk}
-            <!-- Executive KPI Management Dashboard -->
+            ${baseDesk}
+            <!-- Scene 1: Executive KPI Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#0f172a">
-                  <a-text value="EXECUTIVE KPI DASHBOARD — Global Operations\\nAnnual Recurring Revenue: $42.8M (+28% YoY)\\nNet Dollar Retention: 118% | CAC Payback: 9 Mos\\nHeadcount: 248 | Employee Satisfaction: 92%" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="EXECUTIVE KPI DASHBOARD\nARR: $42.8M (+28% YoY)\nNet Dollar Retention: 118% | CAC Payback: 9m" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Glass Strategy Whiteboard on right -->
-            <a-entity position="1.6 1.4 -1.8" rotation="0 -35 0">
-              <a-box width="1.1" height="0.8" depth="0.02" color="#e2e8f0" opacity="0.6">
-                <a-text value="Q3 STRATEGIC OKRs\\n1. Expand EMEA Enterprise\\n2. Launch AI Copilot V2\\n3. Achieve ISO 27001 Audit" position="-0.5 0.25 0.015" width="1.0" color="#0f172a"></a-text>
+
+            <!-- SCENE 2: CORPORATE EXECUTIVE BOARDROOM -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 0.75 0" width="2.0" height="0.06" depth="0.9" color="#1e293b"></a-box>
+              <a-box position="0 1.5 -0.8" width="2.0" height="1.0" depth="0.04" color="#0f172a">
+                <a-text value="BOARD STRATEGY PRESENTATION\n* Q3 Strategic Roadmaps Approved\n* Headcount Expansion in EMEA" position="-0.9 0.3 0.03" width="1.8" color="#38bdf8" font="kelson"></a-text>
               </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: EXECUTIVE BOARDROOM\nCorporate Strategy & Capital Allocation" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
-            <!-- Conference Phone on desk -->
-            <a-cylinder position="0.45 0.785 -1.45" radius="0.08" height="0.03" color="#1e293b"></a-cylinder>
           `;
 
         case "Entrepreneurship":
           return `
-            \${baseDesk}
-            <!-- Pitch Deck & Customer Analytics Workspace -->
+            ${baseDesk}
+            <!-- Scene 1: Pitch Deck Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#431407">
-                  <a-text value="PITCH DECK — Series Seed ($2.5M Round)\\n'AI Workflow Engine for Modern Teams'\\nTraction: 14,000 WAU | MoM Growth: 18%\\nUnit Economics: $180 LTV / $22 CAC | Runway: 18 Mo" position="-0.5 0.2 0.002" width="0.95" color="#fb923c" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="PITCH DECK — Seed Round ($2.5M)\n'AI Workflow Engine for Teams'\nTraction: 14k WAU | MoM: +18%" position="-0.5 0.2 0.002" width="0.95" color="#fb923c" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Sticky Note Sprint Wall on left -->
-            <a-entity position="-1.7 1.4 -1.8" rotation="0 35 0">
-              <a-box width="1.1" height="0.8" depth="0.02" color="#fed7aa">
-                <a-plane position="-0.3 0.2 0.015" width="0.2" height="0.2" color="#fef08a"></a-plane>
-                <a-plane position="0 0.2 0.015" width="0.2" height="0.2" color="#bbf7d0"></a-plane>
-                <a-plane position="0.3 0.2 0.015" width="0.2" height="0.2" color="#fbcfe8"></a-plane>
-                <a-text value="GROWTH EXPERIMENTS\\n* Viral Referral Loop\\n* SEO Programmatic Pages" position="-0.5 -0.1 0.02" width="0.95" color="#431407"></a-text>
+
+            <!-- SCENE 2: STARTUP PITCH & DEMO STAGE -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 0.45 0" width="1.8" height="0.3" depth="1.2" color="#7c2d12"></a-box>
+              <a-box position="0 0.9 -0.3" width="0.4" height="0.9" depth="0.3" color="#9a3412">
+                <a-text value="INVESTOR PODIUM" position="-0.18 0.3 0.16" width="0.4" color="#fed7aa"></a-text>
               </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: INVESTOR PITCH STAGE\nDemo Day Showcases & Growth Roadmaps" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Psychology":
           return `
-            \${baseDesk}
-            <!-- Therapy Assessment & Diagnostic Console -->
+            ${baseDesk}
+            <!-- Scene 1: CBT Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#2e1065">
-                  <a-text value="CLINICAL PSYCHOLOGY ASSESSMENT\\nPatient Progress: Cognitive Behavioral Therapy (CBT)\\nIntervention: Cognitive Restructuring & Exposure\\nMental Status Exam: Alert, Oriented x4, Euthymic" position="-0.5 0.2 0.002" width="0.95" color="#d8b4fe" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="CLINICAL PSYCHOLOGY ASSESSMENT\nPatient Progress: CBT Intervention\nMental Status: Alert, Oriented x4" position="-0.5 0.2 0.002" width="0.95" color="#d8b4fe" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- DSM-5 Reference Manual & Inkblot Cards on desk -->
-            <a-entity position="-0.5 0.785 -1.45" rotation="0 12 0">
-              <a-box width="0.22" height="0.06" depth="0.28" color="#581c87"></a-box>
-              <a-text value="DSM-5" position="-0.08 0.04 0" width="0.2" color="#fff"></a-text>
+
+            <!-- SCENE 2: CLINICAL CONSULTATION LOUNGE -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="-0.5 0.45 0" width="0.8" height="0.45" depth="0.8" color="#581c87"></a-box>
+              <a-box position="0.5 0.45 0" width="0.8" height="0.45" depth="0.8" color="#581c87"></a-box>
+              <a-box position="0 0.35 0" width="0.5" height="0.05" depth="0.5" color="#78350f"></a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: PATIENT THERAPY LOUNGE\nCognitive Behavioral Consultations" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
-            <a-box position="0.4 0.785 -1.45" width="0.18" height="0.01" depth="0.14" color="#f8fafc"></a-box>
           `;
 
         case "Law":
           return `
-            \${baseDesk}
-            <!-- Legal Research & Brief Writing Monitor -->
+            ${baseDesk}
+            <!-- Scene 1: Legal Brief Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#1c1917">
-                  <a-text value="WESTLAW — US Court of Appeals, 2nd Circuit\\nCASE: Apex Technologies v. Meridian Corp.\\nPrecedent: 412 U.S. 658 (Patent Exhaustion Doctrine)\\nMotion: Summary Judgment on Non-Infringement" position="-0.5 0.2 0.002" width="0.95" color="#e7e5e4" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="WESTLAW — US Court of Appeals\nCase: Apex Technologies v. Meridian\nPrecedent: 412 U.S. 658 (Patent Exhaustion)" position="-0.5 0.2 0.002" width="0.95" color="#e7e5e4" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Polished Brass Scales of Justice on desk -->
-            <a-entity position="-0.6 0.95 -1.5">
-              <a-cylinder radius="0.01" height="0.35" color="#d97706" material="metalness: 0.9; roughness: 0.2"></a-cylinder>
-              <a-cylinder position="0 0.16 0" radius="0.006" height="0.24" rotation="0 0 90" color="#d97706"></a-cylinder>
-              <a-cone position="-0.12 0.08 0" radius-bottom="0.05" height="0.02" color="#d97706"></a-cone>
-              <a-cone position="0.12 0.08 0" radius-bottom="0.05" height="0.02" color="#d97706"></a-cone>
-            </a-entity>
-            <!-- Wooden Gavel on Sounding Block on desk -->
-            <a-entity position="0.5 0.8 -1.45" rotation="0 -25 0">
-              <a-cylinder radius="0.05" height="0.02" color="#78350f"></a-cylinder>
-              <a-cylinder position="0 0.03 0" radius="0.02" height="0.08" rotation="90 0 0" color="#92400e"></a-cylinder>
+
+            <!-- SCENE 2: COURTROOM BENCH & LEGAL ARCHIVE -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 0.85 0" width="1.8" height="0.85" depth="0.8" color="#451a03">
+                <a-text value="JUDICIAL BENCH" position="-0.35 0.2 0.42" width="0.8" color="#fde047"></a-text>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: COURTROOM & LEGAL ARCHIVE\nJudicial Precedents & Oral Arguments" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "UX/UI Design":
           return `
-            \${baseDesk}
-            <!-- 32-inch 4K Figma Design Canvas Display -->
+            ${baseDesk}
+            <!-- Scene 1: Figma Canvas Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.2" height="0.65" depth="0.03" color="#111">
+              <a-box width="1.2" height="0.65" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.15" height="0.6" color="#1e1e1e">
-                  <a-text value="FIGMA — Mobile App Design System (iOS 18)\\n[Artboards: Onboarding Flow | Checkout | Dashboard]\\nColor Tokens: Primary #2FBF9F | Surface #FFFFFF\\nComponents: 48 Variants | Auto-Layout: Active" position="-0.55 0.22 0.002" width="1.1" color="#2FBF9F" font="monospace" wrap-count="44"></a-text>
-                  <!-- Simulated Mobile App Wireframe on Canvas -->
-                  <a-plane position="0.32 -0.06 0.003" width="0.18" height="0.36" color="#2c2c2c">
-                    <a-plane position="0 0.12 0.001" width="0.14" height="0.04" color="#F2994A"></a-plane>
-                    <a-plane position="0 0.04 0.001" width="0.14" height="0.08" color="#3a3a3a"></a-plane>
-                    <a-plane position="0 -0.08 0.001" width="0.14" height="0.1" color="#2FBF9F"></a-plane>
-                  </a-plane>
+                  <a-text value="FIGMA — Mobile App Design System\nComponents: 48 Variants | Auto-Layout: Active\nColors: Teal #2FBF9F | Surface #FFFFFF" position="-0.55 0.22 0.002" width="1.1" color="#2FBF9F" font="monospace" wrap-count="44"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Wacom Digital Stylus Tablet on desk -->
-            <a-entity position="-0.4 0.785 -1.45" rotation="0 5 0">
-              <a-box width="0.26" height="0.01" depth="0.2" color="#18181b"></a-box>
-              <a-cylinder position="0.08 0.02 0" radius="0.004" height="0.14" rotation="0 0 -45" color="#38bdf8"></a-cylinder>
-            </a-entity>
-            <!-- Pantone Color Swatch Deck on desk -->
-            <a-entity position="0.45 0.785 -1.45" rotation="0 -35 0">
-              <a-box width="0.18" height="0.015" depth="0.05" color="#ec4899"></a-box>
+
+            <!-- SCENE 2: PRODUCT DESIGN STUDIO & USABILITY LAB -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 1.5 0" width="2.2" height="1.2" depth="0.04" color="#1e293b">
+                <a-text value="DESIGN SPRINT & USER JOURNEY MAP\n* Usability Sessions: 8 Tested\n* Key Finding: Checkout Flow Refined" position="-0.95 0.35 0.03" width="1.9" color="#38bdf8"></a-text>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: USABILITY TESTING LAB\nUser Observation & Interactive Prototyping" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Environmental Science":
           return `
-            \${baseDesk}
-            <!-- QGIS Satellite Topographical Analysis Screen -->
+            ${baseDesk}
+            <!-- Scene 1: QGIS Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#052e16">
-                  <a-text value="QGIS — Multispectral Satellite Imagery (Sentinel-2)\\nNDVI Vegetation Index: 0.74 (Healthy Canopy)\\nWater Quality Test: Dissolved Oxygen 8.4 mg/L (Good)\\nSoil pH: 6.8 | Nitrate Contamination: None Detected" position="-0.5 0.2 0.002" width="0.95" color="#86efac" font="monospace" wrap-count="42"></a-text>
+                  <a-text value="QGIS — Satellite Imagery (Sentinel-2)\nNDVI Index: 0.74 (Healthy Canopy)\nWater Quality: Dissolved O2 8.4 mg/L" position="-0.5 0.2 0.002" width="0.95" color="#86efac" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Field Sampling Kit & Vials on desk -->
-            <a-entity position="-0.5 0.85 -1.5">
-              <a-box width="0.22" height="0.08" depth="0.14" color="#14532d"></a-box>
-              <a-cylinder position="-0.05 0.05 0" radius="0.015" height="0.12" color="#38bdf8" opacity="0.8"></a-cylinder>
-              <a-cylinder position="0.05 0.05 0" radius="0.015" height="0.12" color="#22c55e" opacity="0.8"></a-cylinder>
+
+            <!-- SCENE 2: ECOLOGICAL FIELD TESTING STATION -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 0.85 0" width="1.8" height="0.85" depth="0.8" color="#14532d">
+                <a-cylinder position="-0.3 0.55 0" radius="0.08" height="0.22" color="#38bdf8" opacity="0.8"></a-cylinder>
+                <a-box position="0.3 0.5 0" width="0.35" height="0.14" depth="0.25" color="#a16207"></a-box>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: ECOLOGY FIELD SAMPLING OUTPOST\nSoil Core Titration & Water Quality Analysis" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Technical Writing":
           return `
-            \${baseDesk}
-            <!-- Dual Documentation Authoring Setup -->
+            ${baseDesk}
+            <!-- Scene 1: Markdown Screen -->
             <a-entity position="0 1.2 -1.75">
-              <!-- Left: Markdown API Docs Editor -->
-              <a-box position="-0.46 0 0" width="0.88" height="0.54" depth="0.03" color="#111">
-                <a-plane position="0 0 0.016" width="0.84" height="0.5" color="#1e1e1e">
-                  <a-text value="## POST /v1/telemetry/events\\nReturns real-time device telemetry payloads.\\n\\n\`\`\`json\\n{\\n  'deviceId': 'sensor-42a',\\n  'temperature': 24.5\\n}\\n\`\`\`" position="-0.4 0.18 0.002" width="0.8" color="#fcd34d" font="monospace" wrap-count="38"></a-text>
-                </a-plane>
-              </a-box>
-              <!-- Right: Live Rendered Developer Portal Preview -->
-              <a-box position="0.46 0 0" width="0.88" height="0.54" depth="0.03" color="#111">
+              <a-box position="-0.46 0 0" width="0.88" height="0.54" depth="0.03" color="#1e293b">
                 <a-plane position="0 0 0.016" width="0.84" height="0.5" color="#0f172a">
-                  <a-text value="DEVELOPER DOCUMENTATION PORTAL\\nGET STARTED | REST API REFERENCE | SDKs\\n✓ 200 OK — Telemetry Stream Active\\nResponse Time: 18ms | SDK Version: v2.4" position="-0.4 0.18 0.002" width="0.8" color="#38bdf8" font="monospace" wrap-count="38"></a-text>
+                  <a-text value="## POST /v1/telemetry/events\nReturns real-time device payloads.\n\`\`\`json\n{ 'status': 200, 'device': '42a' }\n\`\`\`" position="-0.4 0.18 0.002" width="0.8" color="#fcd34d" font="monospace" wrap-count="38"></a-text>
                 </a-plane>
               </a-box>
+              <a-box position="0.46 0 0" width="0.88" height="0.54" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="0.84" height="0.5" color="#022c22">
+                  <a-text value="DEV DOCUMENTATION PORTAL\nGET STARTED | REST API REFERENCE\n✓ 200 OK — Telemetry Stream Active" position="-0.4 0.18 0.002" width="0.8" color="#4ade80" font="monospace" wrap-count="38"></a-text>
+                </a-plane>
+              </a-box>
+            </a-entity>
+
+            <!-- SCENE 2: DOCUMENTATION REVIEW & PUBLISHING HUB -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 1.2 0" width="2.0" height="1.6" depth="0.3" color="#334155">
+                <a-text value="OPENAPI 3.1 STYLE GUIDELINES\n* SDK Quickstarts: Python, Go, TS\n* Single-Source Publishing Active" position="-0.9 0.35 0.18" width="1.8" color="#f8fafc"></a-text>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: DOCUMENTATION REVIEW HUB\nDeveloper Guides & Single-Source Publishing" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         case "Architecture":
           return `
-            \${baseDesk}
-            <!-- 3D BIM Revit Modeling Display -->
+            ${baseDesk}
+            <!-- Scene 1: Revit Screen -->
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.1" height="0.6" depth="0.03" color="#111">
-                <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#1e293b">
-                  <a-text value="AUTODESK REVIT — Civic Cultural Center V4\\nFloor Area: 14,200 sq.m | LEED Platinum Target\\nDaylighting Simulation: Optimal | Structural: Steel Frame\\nMEP Clashes: 0 Detected | Elevation: +42.0m" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
+              <a-box width="1.1" height="0.6" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="1.04" height="0.54" color="#0f172a">
+                  <a-text value="AUTODESK REVIT — Cultural Center\nArea: 14,200 sq.m | LEED Platinum\nDaylighting: Optimal | Steel Frame" position="-0.5 0.2 0.002" width="0.95" color="#38bdf8" font="monospace" wrap-count="42"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
-            <!-- Blueprints Rolled Out on Desk -->
-            <a-entity position="-0.4 0.785 -1.45" rotation="0 15 0">
-              <a-plane width="0.35" height="0.25" rotation="-90 0 0" color="#1d4ed8">
-                <!-- White Wireframe Lines -->
-                <a-box position="0 0.002 0" width="0.3" height="0.001" depth="0.2" color="#fff" opacity="0.4"></a-box>
-              </a-plane>
-            </a-entity>
-            <!-- Scale Model Building on Right Pedestal -->
-            <a-entity position="1.5 0.85 -1.8" rotation="0 -30 0">
-              <a-box width="0.4" height="0.6" depth="0.4" color="#e2e8f0"></a-box>
-              <!-- Miniature building structure -->
-              <a-box position="0 0.4 0" width="0.25" height="0.3" depth="0.25" color="#2FBF9F" material="wireframe: true"></a-box>
+
+            <!-- SCENE 2: PHYSICAL MODELING & BIM WORKSHOP -->
+            <a-entity position="4.5 0 -1.7">
+              <a-box position="0 0.85 0" width="1.6" height="0.85" depth="1.0" color="#e2e8f0">
+                <a-box position="0 0.5 0" width="0.5" height="0.7" depth="0.5" color="#2FBF9F" material="wireframe: true"></a-box>
+              </a-box>
+              <a-entity position="0 2.3 0" bobbing="amplitude: 0.03; speed: 2500">
+                <a-plane width="2.1" height="0.34" color="#1B1F38" opacity="0.94">
+                  <a-text value="SCENE 2: ARCHITECTURAL MODELING WORKSHOP\nScale Physical Models & BIM Coordination" align="center" width="1.95" color="#38bdf8" font="kelson"></a-text>
+                </a-plane>
+              </a-entity>
             </a-entity>
           `;
 
         default:
           return `
-            \${baseDesk}
+            ${baseDesk}
             <a-entity position="0 1.2 -1.75">
-              <a-box width="1.0" height="0.55" depth="0.03" color="#111">
-                <a-plane position="0 0 0.016" width="0.95" height="0.5" color="#1e1e2e">
-                  <a-text value="\${careerName.toUpperCase()} WORKSPACE\\nDaily Mission & Tasks Active" position="-0.4 0.1 0.002" width="0.8" color="#2FBF9F" font="kelson"></a-text>
+              <a-box width="1.0" height="0.55" depth="0.03" color="#1e293b">
+                <a-plane position="0 0 0.016" width="0.95" height="0.5" color="#0f172a">
+                  <a-text value="${careerName.toUpperCase()} WORKSPACE\nDaily Mission Active" position="-0.4 0.1 0.002" width="0.8" color="#2FBF9F" font="kelson"></a-text>
                 </a-plane>
               </a-box>
             </a-entity>
@@ -2834,32 +3013,32 @@
        --------------------------------------------------------- */
     const AR_SCENES = {
       "Morning": {
-        skyColor: "#FF9A76",     // Warm sunrise peach
-        ambientColor: "#5D6D7E",  // Soft morning ambient
-        lightIntensity: 0.5,
-        lightPosition: "-2 1 -1", // Low angle side-light
-        lightColor: "#FAD7A0"     // Soft yellow sunlight
+        skyColor: "#fef3c7",     // Bright morning sunrise gold
+        ambientColor: "#9ca3af",  // Bright ambient fill
+        lightIntensity: 1.1,      // Crisp lighting
+        lightPosition: "-2 3.5 1",
+        lightColor: "#fffbeb"
       },
       "Midday": {
-        skyColor: "#5DADE2",     // Bright clear blue sky
-        ambientColor: "#AEB6BF",  // Bright daytime ambient
-        lightIntensity: 0.8,
-        lightPosition: "0 4 -0.5", // Noon sun directly overhead
-        lightColor: "#FFFFFF"     // Crisp white light
+        skyColor: "#bae6fd",     // Crisp clear daylight sky
+        ambientColor: "#cbd5e1",  // Bright daylight ambient
+        lightIntensity: 1.25,     // Direct sunlight
+        lightPosition: "0 5 0",
+        lightColor: "#ffffff"
       },
       "Evening": {
-        skyColor: "#8E44AD",     // Sunset orange-purple
-        ambientColor: "#34495E",  // Sunset dusky ambient
-        lightIntensity: 0.45,
-        lightPosition: "2 0.8 -1", // Low golden light
-        lightColor: "#E67E22"     // Deep golden amber light
+        skyColor: "#fbcfe8",     // Soft sunset pastel
+        ambientColor: "#94a3b8",  // Soft evening ambient
+        lightIntensity: 0.95,
+        lightPosition: "2 2.5 1",
+        lightColor: "#fed7aa"
       },
       "Post Work": {
-        skyColor: "#1A252F",     // Dusk/Night sky
-        ambientColor: "#1C2833",  // Dim ambient night light
-        lightIntensity: 0.25,
-        lightPosition: "0 3 1",   // Soft overhead moonlight
-        lightColor: "#AED6F1"     // Soft light-blue moonlight
+        skyColor: "#334155",     // Modern soft evening interior
+        ambientColor: "#64748b",  // Warm interior ambient
+        lightIntensity: 0.8,
+        lightPosition: "0 4 1",
+        lightColor: "#fef3c7"
       }
     };
 
@@ -2874,7 +3053,6 @@
       const entry = activeARCareer.dayInLife.find(d => d.time === time);
       if (!entry) return;
 
-      // Update Sky color smoothly
       const sky = document.getElementById("arSky");
       if (sky) {
         sky.setAttribute('animation', {
@@ -2885,7 +3063,6 @@
         });
       }
 
-      // Update Directional Light parameters smoothly
       const dirLight = document.getElementById("arLight");
       if (dirLight) {
         dirLight.setAttribute('animation__pos', {
@@ -2908,7 +3085,6 @@
         });
       }
 
-      // Update Ambient Light color smoothly
       const ambLight = document.getElementById("arAmbientLight");
       if (ambLight) {
         ambLight.setAttribute('animation', {
@@ -2919,14 +3095,12 @@
         });
       }
 
-      // Update Central Focus Panel texts
       const timeBadgeText = document.getElementById("arTimeBadgeText");
       const activityText = document.getElementById("arActivityText");
 
       if (timeBadgeText) timeBadgeText.setAttribute('value', entry.time);
       if (activityText) activityText.setAttribute('value', entry.activity);
 
-      // Update interactive 3D buttons coloring states
       const times = ["Morning", "Midday", "Evening", "Post Work"];
       times.forEach((t) => {
         const btnId = `btn-${t.replace(' ', '')}`;
@@ -2958,98 +3132,106 @@
 
       // Gaze-activated Exit Panel for VR
       const vrExitHTML = `
-    <a-entity id="vrExitButton" position="0 0.42 -1.4" rotation="-30 0 0" gaze-exit class="raycastable">
-      <a-ring radius-inner="0.18" radius-outer="0.21" color="#F2994A" material="roughness: 0.5"></a-ring>
-      <a-cylinder radius="0.17" height="0.04" rotation="90 0 0" color="#1B1F38" material="roughness: 0.3"
-                  animation__hover="property: scale; to: 1.08 1.08 1.08; dur: 150; startEvents: mouseenter"
-                  animation__leave="property: scale; to: 1 1 1; dur: 150; startEvents: mouseleave"
-                  animation__click="property: position; to: 0 0 -0.03; dur: 80; dir: alternate; loop: 2; startEvents: click">
-      </a-cylinder>
-      <a-text value="EXIT AR" align="center" width="1.5" color="#F3F5FA" font="kelson" position="0 0 0.025"></a-text>
-    </a-entity>
-  `;
-
-      // Setup dynamic A-Frame scene
-      container.innerHTML = `
-    <a-scene embedded style="width: 100%; height: 100%;" cursor="rayOrigin: mouse" raycaster="objects: .raycastable">
-      <!-- Camera & Gaze Cursor setup -->
-      <a-entity camera look-controls position="0 1.6 0">
-        <a-entity cursor="fuse: true; fuseTimeout: 1400"
-                  position="0 0 -0.8"
-                  geometry="primitive: ring; radiusInner: 0.012; radiusOuter: 0.02"
-                  material="color: #F2994A; shader: flat; opacity: 0.75"
-                  raycaster="objects: .raycastable"
-                  animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dir: alternate; from: 1 1 1; to: 0.1 0.1 0.1; dur: 1400"
-                  animation__reset="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 200">
+        <a-entity id="vrExitButton" position="0 0.42 -1.4" rotation="-30 0 0" gaze-exit class="raycastable">
+          <a-ring radius-inner="0.18" radius-outer="0.21" color="#F2994A" material="roughness: 0.5"></a-ring>
+          <a-cylinder radius="0.17" height="0.04" rotation="90 0 0" color="#1B1F38" material="roughness: 0.3"
+                      animation__hover="property: scale; to: 1.08 1.08 1.08; dur: 150; startEvents: mouseenter"
+                      animation__leave="property: scale; to: 1 1 1; dur: 150; startEvents: mouseleave"
+                      animation__click="property: position; to: 0 0 -0.03; dur: 80; dir: alternate; loop: 2; startEvents: click">
+          </a-cylinder>
+          <a-text value="EXIT AR" align="center" width="1.5" color="#F3F5FA" font="kelson" position="0 0 0.025"></a-text>
         </a-entity>
-      </a-entity>
+      `;
 
-      <!-- Colored environment sky matching Morning initially -->
-      <a-sky id="arSky" color="${AR_SCENES['Morning'].skyColor}"></a-sky>
-      
-      <!-- Spatial environment floor -->
-      <a-plane rotation="-90 0 0" width="100" height="100" color="#14172B" material="roughness: 0.95; metalness: 0.05"></a-plane>
-      <a-plane rotation="-90 0 0" width="30" height="30" color="#2FBF9F" material="wireframe: true; opacity: 0.08" position="0 0.01 0"></a-plane>
+      // Setup dynamic A-Frame scene with free-roam WASD locomotion and 2 scenes
+      container.innerHTML = `
+        <!-- Floating Active Scene Indicator -->
+        <div id="arZoneIndicator" class="ar-zone-banner">📍 Scene 1: Main Workstation</div>
 
-      <!-- Ambient and Directional Lights -->
-      <a-entity id="arAmbientLight" light="type: ambient; color: ${AR_SCENES['Morning'].ambientColor}"></a-entity>
-      <a-entity id="arLight" light="type: directional; color: ${AR_SCENES['Morning'].lightColor}; intensity: ${AR_SCENES['Morning'].lightIntensity}" position="${AR_SCENES['Morning'].lightPosition}"></a-entity>
+        <!-- Floating VR Locomotion Navigation HUD -->
+        <div class="ar-hud-nav">
+          <span class="ar-hud-hint">🎮 [WASD] Walk | Teleport:</span>
+          <button class="ar-hud-btn" onclick="teleportCameraTo('0 0 1.8', 'Scene 1: Main Workstation')">🖥️ Scene 1: Workstation</button>
+          <button class="ar-hud-btn" onclick="teleportCameraTo('4.5 0 1.8', 'Scene 2: Specialized Facility')">🏢 Scene 2: Field Facility</button>
+          <button class="ar-hud-btn" onclick="teleportCameraTo('2.25 0 3.0', 'Studio Center View')">👁️ Center View</button>
+        </div>
 
-      <!-- Career-Specific Immersive 3D Visual Elements & Realistic Workstation -->
-      <a-entity id="careerVisualsCenterpiece">
-        ${getCareerVisualsHTML(career.name, themeColor)}
-      </a-entity>
+        <a-scene embedded style="width: 100%; height: 100%;" cursor="rayOrigin: mouse" raycaster="objects: .raycastable">
+          <!-- Locomotion Camera Rig (Free Roam WASD + Look Controls) -->
+          <a-entity id="cameraRig" position="0 0 1.8" movement-controls="fly: false">
+            <a-entity id="head" camera look-controls wasd-controls="acceleration: 24; fly: false" position="0 1.6 0">
+              <a-entity cursor="fuse: true; fuseTimeout: 1400"
+                        position="0 0 -0.8"
+                        geometry="primitive: ring; radiusInner: 0.012; radiusOuter: 0.02"
+                        material="color: #F2994A; shader: flat; opacity: 0.75"
+                        raycaster="objects: .raycastable"
+                        animation__fusing="property: scale; startEvents: fusing; easing: easeInQuad; dir: alternate; from: 1 1 1; to: 0.1 0.1 0.1; dur: 1400"
+                        animation__reset="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 200">
+              </a-entity>
+            </a-entity>
+          </a-entity>
 
-      <!-- Central Focus Panel displaying the active task (floating above workstation) -->
-      <a-entity id="mainFocusPanel" position="0 1.8 -2.1" bobbing="amplitude: 0.04; speed: 2200">
-        <a-plane width="1.9" height="0.7" color="#1B1F38" material="opacity: 0.94; transparent: true; roughness: 0.7" class="raycastable"></a-plane>
-        <a-plane width="1.86" height="0.66" position="0 0 0.005" color="${themeColor}" material="opacity: 0.25; transparent: true"></a-plane>
-        
-        <!-- Active Time Label Tag -->
-        <a-plane width="0.48" height="0.16" position="-0.58 0.2 0.01" color="#F2994A" material="opacity: 0.95">
-          <a-text id="arTimeBadgeText" value="Morning" align="center" width="1.5" color="#14172B" font="kelson" anchor="center"></a-text>
-        </a-plane>
-        
-        <!-- Active Task description text -->
-        <a-text id="arActivityText" value="${morningEntry.activity}" position="-0.85 -0.05 0.01" width="1.7" color="#F3F5FA" font="kelson" wrap-count="28" anchor="left" baseline="center"></a-text>
-      </a-entity>
+          <!-- Bright Clear Environment Sky -->
+          <a-sky id="arSky" color="${AR_SCENES['Morning'].skyColor}"></a-sky>
 
-      <!-- Floating 3D Time Selector Row (easily reachable in foreground) -->
-      <a-entity position="0 0.95 -1.45">
-        <!-- Morning Button -->
-        <a-plane id="btn-Morning" time-selector="time: Morning" position="-0.54 0 0" width="0.32" height="0.13" color="#F2994A" material="opacity: 0.92; roughness: 0.5" class="raycastable">
-          <a-text value="Morning" align="center" width="1.2" color="#14172B" font="kelson" position="0 0 0.01"></a-text>
-        </a-plane>
-        
-        <!-- Midday Button -->
-        <a-plane id="btn-Midday" time-selector="time: Midday" position="-0.18 0 0" width="0.32" height="0.13" color="#1B1F38" material="opacity: 0.92; roughness: 0.5" class="raycastable">
-          <a-text value="Midday" align="center" width="1.2" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
-        </a-plane>
+          <!-- Bright Ambient and Directional Sunlight -->
+          <a-entity id="arAmbientLight" light="type: ambient; color: ${AR_SCENES['Morning'].ambientColor}; intensity: 0.85"></a-entity>
+          <a-entity id="arLight" light="type: directional; color: ${AR_SCENES['Morning'].lightColor}; intensity: ${AR_SCENES['Morning'].lightIntensity}" position="${AR_SCENES['Morning'].lightPosition}"></a-entity>
 
-        <!-- Evening Button -->
-        <a-plane id="btn-Evening" time-selector="time: Evening" position="0.18 0 0" width="0.32" height="0.13" color="#1B1F38" material="opacity: 0.92; roughness: 0.5" class="raycastable">
-          <a-text value="Evening" align="center" width="1.2" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
-        </a-plane>
+          <!-- Studio Architectural Shell & Floor Teleport Waypoints -->
+          ${getEnvironmentShellHTML()}
 
-        <!-- Post Work Button -->
-        <a-plane id="btn-PostWork" time-selector="time: Post Work" position="0.54 0 0" width="0.32" height="0.13" color="#1B1F38" material="opacity: 0.92; roughness: 0.5" class="raycastable">
-          <a-text value="Post Work" align="center" width="1.2" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
-        </a-plane>
-      </a-entity>
+          <!-- 2 Distinct Scenes (Workstation + Specialized Facility) -->
+          <a-entity id="careerVisualsCenterpiece">
+            ${getCareerVisualsHTML(career.name, themeColor)}
+          </a-entity>
 
-      <!-- Overhead Title Panel -->
-      <a-entity position="0 2.35 -2.4" bobbing="amplitude: 0.025; speed: 2800">
-        <a-plane width="2.2" height="0.34" color="#14172B" material="opacity: 0.95; transparent: true" class="raycastable"></a-plane>
-        <a-text value="${career.name.toUpperCase()}" align="center" width="2.8" color="#F2994A" font="kelson" bold="true" anchor="center"></a-text>
-      </a-entity>
+          <!-- Central Focus Panel displaying the active task (floating above workstation) -->
+          <a-entity id="mainFocusPanel" position="0 1.8 -2.1" bobbing="amplitude: 0.04; speed: 2200">
+            <a-plane width="1.9" height="0.7" color="#1B1F38" material="opacity: 0.94; transparent: true; roughness: 0.7" class="raycastable"></a-plane>
+            <a-plane width="1.86" height="0.66" position="0 0 0.005" color="${themeColor}" material="opacity: 0.25; transparent: true"></a-plane>
+            
+            <!-- Active Time Label Tag -->
+            <a-plane width="0.48" height="0.16" position="-0.58 0.2 0.01" color="#F2994A" material="opacity: 0.95">
+              <a-text id="arTimeBadgeText" value="Morning" align="center" width="1.5" color="#14172B" font="kelson" anchor="center"></a-text>
+            </a-plane>
+            
+            <!-- Active Task description text -->
+            <a-text id="arActivityText" value="${morningEntry.activity}" position="-0.85 -0.05 0.01" width="1.7" color="#F3F5FA" font="kelson" wrap-count="28" anchor="left" baseline="center"></a-text>
+          </a-entity>
 
-      <!-- Gaze Exit cylinder -->
-      ${vrExitHTML}
-    </a-scene>
+          <!-- Floating 3D Time Selector Row -->
+          <a-entity position="0 0.95 -1.45">
+            <a-plane id="btn-Morning" time-selector="time: Morning" position="-0.54 0 0" width="0.32" height="0.13" color="#F2994A" material="opacity: 0.92; roughness: 0.5" class="raycastable">
+              <a-text value="Morning" align="center" width="1.2" color="#14172B" font="kelson" position="0 0 0.01"></a-text>
+            </a-plane>
+            
+            <a-plane id="btn-Midday" time-selector="time: Midday" position="-0.18 0 0" width="0.32" height="0.13" color="#1B1F38" material="opacity: 0.92; roughness: 0.5" class="raycastable">
+              <a-text value="Midday" align="center" width="1.2" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
+            </a-plane>
 
-    <!-- HTML Exit Button for normal screen preview -->
-    <button class="ar-close-button" onclick="closeARScene()" aria-label="Exit AR Scene">✕ Close Preview</button>
-  `;
+            <a-plane id="btn-Evening" time-selector="time: Evening" position="0.18 0 0" width="0.32" height="0.13" color="#1B1F38" material="opacity: 0.92; roughness: 0.5" class="raycastable">
+              <a-text value="Evening" align="center" width="1.2" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
+            </a-plane>
+
+            <a-plane id="btn-PostWork" time-selector="time: Post Work" position="0.54 0 0" width="0.32" height="0.13" color="#1B1F38" material="opacity: 0.92; roughness: 0.5" class="raycastable">
+              <a-text value="Post Work" align="center" width="1.2" color="#F3F5FA" font="kelson" position="0 0 0.01"></a-text>
+            </a-plane>
+          </a-entity>
+
+          <!-- Overhead Title Panel -->
+          <a-entity position="0 2.35 -2.4" bobbing="amplitude: 0.025; speed: 2800">
+            <a-plane width="2.2" height="0.34" color="#14172B" material="opacity: 0.95; transparent: true" class="raycastable"></a-plane>
+            <a-text value="${career.name.toUpperCase()}" align="center" width="2.8" color="#F2994A" font="kelson" bold="true" anchor="center"></a-text>
+          </a-entity>
+
+          <!-- Gaze Exit cylinder -->
+          ${vrExitHTML}
+        </a-scene>
+
+        <!-- HTML Exit Button for normal screen preview -->
+        <button class="ar-close-button" onclick="closeARScene()" aria-label="Exit AR Scene">✕ Close Preview</button>
+      `;
     }
 
     function closeARScene() {
@@ -3074,6 +3256,7 @@
       container.style.display = "none";
       document.body.style.overflow = "";
     }
+
 
     /* ---------------------------------------------------------
        9. RESET & GENERAL NAVIGATION
